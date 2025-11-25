@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 歌词源优先级设置 -->
+    <PreferenceCategory android:title="Lyric Source Priority">
+        <ListPreference
+            android:key="lyric_source_priority"
+            android:title="Source Priority"
+            android:entries="@array/lyric_source_entries"
+            android:entryValues="@array/lyric_source_values"
+            android:defaultValue="embedded,local,network" />
+    </PreferenceCategory>
+
+    <!-- 悬浮窗设置 -->
+    <PreferenceCategory android:title="Floating Window">
+        <ListPreference
+            android:key="text_color_mode"
+            android:title="Text Color Mode"
+            android:entries="@array/color_mode_entries"
+            android:entryValues="@array/color_mode_values"
+            android:defaultValue="auto" />
+        
+        <EditTextPreference
+            android:key="custom_text_color"
+            android:title="Custom Text Color"
+            android:defaultValue="#FFFFFF" />
+            
+        <ListPreference
+            android:key="animation_type"
+            android:title="Animation Type"
+            android:entries="@array/animation_entries"
+            android:entryValues="@array/animation_values"
+            android:defaultValue="fade" />
+    </PreferenceCategory>
+
+    <!-- 缓存设置 -->
+    <PreferenceCategory android:title="Cache">
+        <SwitchPreferenceCompat
+            android:key="auto_cache_lyrics"
+            android:title="Auto Cache Lyrics"
+            android:defaultValue="true" />
+            
+        <Preference
+            android:key="scan_local_songs"
+            android:title="Scan Local Songs and Download Lyrics" />
+            
+        <Preference
+            android:key="clear_cache"
+            android:title="Clear Lyrics Cache" />
+    </PreferenceCategory>
+
+</PreferenceScreen>
