@@ -54,7 +54,7 @@ dependencies {
     // 媒体元数据解析
     implementation("com.mpatric:mp3agic:0.9.1")
     
-    // 歌词解析
+    // 歌词解析 - 使用JitPack
     implementation("com.github.moyosoft:lyric-parser:1.0.1")
     
     // 偏好设置
