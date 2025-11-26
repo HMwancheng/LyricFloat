@@ -20,11 +20,8 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew || true
-
-      - name: Build with Gradle 9.x
-        run: ./gradlew assembleRelease --no-daemon
+      - name: Build with system Gradle (latest)
+        run: gradle assembleRelease --no-daemon
         env:
           ORG_GRADLE_PROJECT_kotlinVersion: 2.0.0
           ORG_GRADLE_PROJECT_androidPluginVersion: 8.5.0
