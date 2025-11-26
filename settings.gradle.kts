@@ -4,6 +4,10 @@ pluginManagement {
         mavenCentral()
         gradlePluginPortal()
     }
+    plugins {
+        id("com.android.application") version "8.5.0"
+        id("org.jetbrains.kotlin.android") version "2.0.0"
+    }
 }
 
 dependencyResolutionManagement {
@@ -11,7 +15,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven { url = uri("https://jitpack.io") } // 用于lyric-parser库
+        maven { url = uri("https://jitpack.io") }
     }
 }
 
