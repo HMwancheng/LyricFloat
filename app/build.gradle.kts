@@ -71,6 +71,13 @@ dependencies {
     // 生命周期库（兼容minSdk 16）
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.5.1")
     
+    // 媒体兼容库（解决MediaControllerCompat等引用）
+    implementation("androidx.media:media:1.6.0")
+    implementation("androidx.media:media-compat:1.6.0")
+    
+    // 视图绑定（解决ActivityMainBinding）
+    implementation("androidx.databinding:viewbinding:8.5.0")
+    
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
