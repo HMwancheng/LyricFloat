@@ -15,6 +15,9 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        // 启用Multidex（关键）
+        multiDexEnabled = true
     }
 
     buildTypes {
@@ -41,7 +44,7 @@ android {
     
     buildFeatures {
         viewBinding = true
-        dataBinding = false // 禁用DataBinding，避免不必要的依赖
+        dataBinding = false
     }
     
     packaging {
@@ -61,9 +64,12 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     
-    // 媒体库（使用Media3，替代旧版media-compat）
+    // Media3媒体库（精简必要模块）
     implementation("androidx.media3:media3-session:1.2.1")
     implementation("androidx.media3:media3-common:1.2.1")
+    
+    // Multidex支持（minSdk<21必需）
+    implementation("androidx.multidex:multidex:2.0.1")
     
     // 偏好设置
     implementation("androidx.preference:preference-ktx:1.2.1")
