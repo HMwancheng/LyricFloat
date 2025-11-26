@@ -1,10 +1,9 @@
 package com.lyricfloat
 
-import android.app.Application
+import androidx.multidex.MultiDexApplication
 
-class LyricFloatApp : Application() {
+class LyricFloatApp : MultiDexApplication() { // 继承MultiDexApplication
     override fun onCreate() {
         super.onCreate()
-        // 初始化代码（如偏好设置、网络配置等）
     }
 }
