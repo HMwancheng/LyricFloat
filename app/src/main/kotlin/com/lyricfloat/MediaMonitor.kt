@@ -1,5 +1,6 @@
 package com.lyricfloat
 
+import android.content.ComponentName
 import android.content.Context
 import android.os.Build
 import android.os.Handler
@@ -8,10 +9,11 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
-import androidx.media3.session.MediaLibraryService
+import androidx.media3.session.SessionToken.TYPE_LIBRARY_SERVICE
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 class MediaMonitor(private val context: Context, private val onLyricUpdate: (PlaybackState) -> Unit) {
 
@@ -23,8 +25,18 @@ class MediaMonitor(private val context: Context, private val onLyricUpdate: (Pla
     fun startMonitoring() {
         CoroutineScope(Dispatchers.Main).launch {
             try {
-                val sessionToken = SessionToken(context, MediaLibraryService::class.java)
-                mediaController = MediaController.Builder(context, sessionToken).build()
+                // 修正SessionToken构造：使用ComponentName（包名+服务类名）
+                val componentName = ComponentName(
+                    context.packageName,
+                    "androidx.media3.session.MediaLibraryService" // 系统媒体服务类名
+                )
+                val sessionToken = SessionToken(context, componentName, TYPE_LIBRARY_SERVICE)
+                
+                // 修正MediaController构建（使用await()等待异步构建）
+                mediaController = MediaController.Builder(context, sessionToken)
+                    .buildAsync()
+                    .await() // 异步构建并等待结果
+                
                 mediaController?.addListener(playerListener)
                 updatePlaybackState()
             } catch (e: Exception) {
@@ -37,6 +49,7 @@ class MediaMonitor(private val context: Context, private val onLyricUpdate: (Pla
     // 停止监控
     fun stopMonitoring() {
         mediaController?.removeListener(playerListener)
+        mediaController?.release() // 释放资源
         mediaController = null
         handler.removeCallbacks(updateRunnable)
     }
@@ -69,6 +82,10 @@ class MediaMonitor(private val context: Context, private val onLyricUpdate: (Pla
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            updatePlaybackState()
+        }
+
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
             updatePlaybackState()
         }
     }
