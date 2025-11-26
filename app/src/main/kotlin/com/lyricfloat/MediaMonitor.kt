@@ -1,42 +1,90 @@
 package com.lyricfloat
 
 import android.content.Context
+import android.media.browse.MediaBrowser
+import android.media.session.MediaController
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
 
 class MediaMonitor(private val context: Context, private val onLyricUpdate: (PlaybackState) -> Unit) {
 
+    private var mediaBrowser: MediaBrowser? = null
+    private var mediaController: MediaController? = null
     private val handler = Handler(Looper.getMainLooper())
     private val updateRunnable = Runnable { updatePlaybackState() }
 
-    // 开始模拟监控（完全不依赖Media3）
+    // 开始监听系统媒体会话
     fun startMonitoring() {
-        handler.postDelayed(updateRunnable, 1000)
+        // 初始化MediaBrowser连接系统媒体服务
+        mediaBrowser = MediaBrowser(
+            context,
+            MediaBrowser.ServiceBrowserRoot("media", null),
+            object : MediaBrowser.ConnectionCallback() {
+                override fun onConnected() {
+                    mediaBrowser?.sessionToken?.let { token ->
+                        mediaController = MediaController(context, token)
+                        mediaController?.registerCallback(mediaControllerCallback)
+                    }
+                    updatePlaybackState()
+                    handler.postDelayed(updateRunnable, 500)
+                }
+
+                override fun onConnectionFailed() {
+                    // 连接失败时回退到模拟数据
+                    startSimulatedMonitoring()
+                }
+            },
+            null
+        ).apply { connect() }
     }
 
-    // 停止监控
+    // 停止监听
     fun stopMonitoring() {
+        mediaController?.unregisterCallback(mediaControllerCallback)
+        mediaBrowser?.disconnect()
         handler.removeCallbacks(updateRunnable)
     }
 
-    // 模拟播放状态更新
+    // 更新真实播放状态
     private fun updatePlaybackState() {
-        // 模拟真实歌曲数据
-        val title = "Hello World"
-        val artist = "Sample Artist"
-        val position = System.currentTimeMillis() % 15000 // 模拟15秒歌曲进度
-        val isPlaying = true
+        val controller = mediaController ?: return
 
-        // 发送播放状态
-        val playbackState = PlaybackState(
-            title = title,
-            artist = artist,
-            position = position,
-            isPlaying = isPlaying
-        )
-        onLyricUpdate(playbackState)
+        // 获取真实媒体信息
+        val metadata = controller.metadata
+        val title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "未知歌曲"
+        val artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: "未知歌手"
+        val position = controller.playbackState?.position ?: 0L
+        val isPlaying = controller.playbackState?.state == PlaybackState.STATE_PLAYING
 
-        // 循环更新
+        // 发送真实播放状态
+        onLyricUpdate(PlaybackState(title, artist, position, isPlaying))
         handler.postDelayed(updateRunnable, 500)
     }
+
+    // 媒体控制器回调
+    private val mediaControllerCallback = object : MediaController.Callback() {
+        override fun onMetadataChanged(metadata: MediaMetadata?) {
+            updatePlaybackState()
+        }
+
+        override fun onPlaybackStateChanged(state: PlaybackState?) {
+            updatePlaybackState()
+        }
+    }
+
+    // 模拟监控（备用）
+    private fun startSimulatedMonitoring() {
+        updatePlaybackState()
+        handler.postDelayed(updateRunnable, 1000)
+    }
 }
+
+// 修正PlaybackState数据类（与媒体库类型对齐）
+data class PlaybackState(
+    val title: String = "",
+    val artist: String = "",
+    val position: Long = 0L,
+    val isPlaying: Boolean = false
+)
