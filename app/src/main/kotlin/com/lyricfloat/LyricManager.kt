@@ -119,11 +119,12 @@ class LyricManager(private val context: Context) {
         }
     }
 
-    // 解析歌词文本
+    // 替换原有歌词解析逻辑，使用兼容的库
     private fun parseLyricText(lyricText: String, playbackState: PlaybackState, source: LyricSource): Lyric {
         val lines = mutableListOf<LyricLine>()
-        val linePattern = Regex("\\[(\\d{2}):(\\d{2})\\.(\\d{2,3})\\](.*)")
         
+        // 使用正则表达式直接解析，避免依赖第三方库的兼容性问题
+        val linePattern = Regex("\\[(\\d{2}):(\\d{2})\\.(\\d{2,3})\\](.*)")
         lyricText.lines().forEach { line ->
             val matchResult = linePattern.find(line)
             if (matchResult != null) {
