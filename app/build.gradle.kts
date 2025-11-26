@@ -7,10 +7,10 @@ android {
     namespace = "com.lyricfloat"
     compileSdk = 34
 
-    // 跳过签名验证（仅CI测试用）
+    // 简化签名配置（生成未签名APK）
     signingConfigs {
         create("release") {
-            // 空配置，强制跳过签名验证
+            // 空配置，允许生成未签名APK
             enableV1Signing = false
             enableV2Signing = false
         }
@@ -28,13 +28,13 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release") // 使用空签名配置
+            signingConfig = signingConfigs.getByName("release") // 关联空签名配置
             isMinifyEnabled = false
-            isSigningReady = true // 强制标记签名已就绪
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // 移除无效的isSigningReady属性
         }
     }
 
