@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 歌词源优先级 -->
+    <string-array name="lyric_source_entries">
+        <item>Embedded Lyrics</item>
+        <item>Local LRC Files</item>
+        <item>Network (LrcLib)</item>
+    </string-array>
+    <string-array name="lyric_source_values">
+        <item>embedded</item>
+        <item>local</item>
+        <item>network</item>
+    </string-array>
+
+    <!-- 颜色模式 -->
+    <string-array name="color_mode_entries">
+        <item>Auto (Follow System)</item>
+        <item>Light (White)</item>
+        <item>Dark (Black)</item>
+        <item>Custom</item>
+    </string-array>
+    <string-array name="color_mode_values">
+        <item>auto</item>
+        <item>light</item>
+        <item>dark</item>
+        <item>custom</item>
+    </string-array>
+
+    <!-- 动画类型 -->
+    <string-array name="animation_entries">
+        <item>Fade</item>
+        <item>Slide</item>
+        <item>None</item>
+    </string-array>
+    <string-array name="animation_values">
+        <item>fade</item>
+        <item>slide</item>
+        <item>none</item>
+    </string-array>
+</resources>
