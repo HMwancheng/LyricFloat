@@ -13,12 +13,17 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <uses-sdk
+        android:minSdkVersion="16"
+        android:targetSdkVersion="34"
+        tools:overrideLibrary="com.google.android.material" />
+
     <application
         android:name=".LyricFloatApp"
         android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@android:drawable/ic_media_play"  <!-- 使用系统默认图标 -->
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@android:drawable/ic_media_play"  <!-- 使用系统默认图标 -->
         android:supportsRtl="true"
         android:theme="@style/Theme.LyricFloat"
         tools:targetApi="31">
