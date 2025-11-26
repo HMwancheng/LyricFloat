@@ -28,8 +28,7 @@
         android:label="@string/app_name"
         android:roundIcon="@android:drawable/ic_media_play"
         android:supportsRtl="true"
-        android:theme="@style/Theme.LyricFloat"
-        android:multidexEnabled="true">
+        android:theme="@style/Theme.LyricFloat"> <!-- 移除错误的multidexEnabled属性 -->
 
         <!-- 主界面 -->
         <activity
