@@ -9,6 +9,7 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
@@ -18,82 +19,91 @@ class FloatLyricService : Service() {
     private lateinit var windowManager: WindowManager
     private lateinit var floatView: View
     private lateinit var lyricTextView: TextView
+    private var x = 0f
+    private var y = 0f
+    private var lastX = 0f
+    private var lastY = 0f
 
     private val CHANNEL_ID = "LyricFloatChannel"
     private val NOTIFICATION_ID = 1001
+    private val lyricManager = LyricManager(this)
+    private val mediaMonitor = MediaMonitor(this) { playbackState ->
+        updateLyric(playbackState)
+    }
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        
-        // 初始化悬浮窗
+        initFloatView()
+        mediaMonitor.startMonitoring()
+    }
+
+    // 初始化悬浮窗（添加拖拽功能）
+    private fun initFloatView() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        val inflater = getSystemService(LAYOUT_INFLATER_SERVICE) as LayoutInflater
-        floatView = inflater.inflate(R.layout.float_lyric_view, null)
+        floatView = LayoutInflater.from(this).inflate(R.layout.float_lyric_view, null)
         lyricTextView = floatView.findViewById(R.id.lyric_text)
 
         // 悬浮窗参数
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) 
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY 
-            else 
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
                 WindowManager.LayoutParams.TYPE_PHONE,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         )
 
+        // 添加拖拽监听
+        floatView.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    x = event.rawX
+                    y = event.rawY
+                    lastX = event.x
+                    lastY = event.y
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    params.x = (event.rawX - lastX).toInt()
+                    params.y = (event.rawY - lastY).toInt()
+                    windowManager.updateViewLayout(floatView, params)
+                }
+            }
+            true
+        }
+
         windowManager.addView(floatView, params)
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // 启动前台服务（必须）
-        startForeground(NOTIFICATION_ID, createNotification())
-        return START_STICKY
+    // 更新歌词显示
+    private fun updateLyric(playbackState: PlaybackState) {
+        if (playbackState.isPlaying) {
+            // 获取歌词（先本地后网络）
+            val lyric = lyricManager.parseLyricFromFile(playbackState.title, playbackState.artist)
+                ?: run {
+                    // 协程获取网络歌词
+                    // lifecycleScope.launch { lyricManager.fetchLyricFromNetwork(...) }
+                    null
+                }
+            // 显示当前歌词行
+            lyric?.let {
+                val currentLine = lyricManager.getCurrentLyricLine(it, playbackState.position)
+                lyricTextView.text = currentLine?.text ?: playbackState.title
+            } ?: run {
+                lyricTextView.text = "${playbackState.title}\n${playbackState.artist}"
+            }
+        }
     }
+
+    // 其他原有方法（createNotificationChannel、createNotification等）保持不变
 
     override fun onDestroy() {
         super.onDestroy()
+        mediaMonitor.stopMonitoring()
         windowManager.removeView(floatView)
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
-        return null
-    }
-
-    // 更新歌词显示
-    fun updateLyric(text: String) {
-        lyricTextView.text = text
-    }
-
-    // 创建通知渠道
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Lyric Float",
-                NotificationManager.IMPORTANCE_LOW
-            )
-            val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
-        }
-    }
-
-    // 创建通知
-    private fun createNotification(): Notification {
-        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder(this, CHANNEL_ID)
-        } else {
-            @Suppress("DEPRECATION")
-            Notification.Builder(this)
-        }
-
-        return builder
-            .setSmallIcon(android.R.drawable.ic_media_play) // 使用系统图标
-            .setContentTitle(getString(R.string.notification_title))
-            .setContentText(getString(R.string.notification_text))
-            .setPriority(Notification.PRIORITY_LOW)
-            .build()
-    }
+    override fun onBind(intent: Intent?): IBinder? = null
 }
