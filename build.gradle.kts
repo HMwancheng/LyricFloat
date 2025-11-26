@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android") apply false
 }
 
+// 替换废弃的buildDir引用，使用layout.buildDirectory
 tasks.register("clean", Delete::class) {
-    delete(rootProject.buildDir)
+    delete(layout.buildDirectory)
 }
