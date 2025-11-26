@@ -7,13 +7,9 @@ android {
     namespace = "com.lyricfloat"
     compileSdk = 34
 
-    // 简化签名配置（生成未签名APK）
+    // 移除自定义release签名配置，使用AGP默认行为
     signingConfigs {
-        create("release") {
-            // 空配置，允许生成未签名APK
-            enableV1Signing = false
-            enableV2Signing = false
-        }
+        // 仅保留默认debug配置（无需修改）
     }
 
     defaultConfig {
@@ -28,13 +24,14 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release") // 关联空签名配置
+            // 不设置signingConfig，让AGP生成未签名APK
+            signingConfig = null
             isMinifyEnabled = false
+            isDebuggable = false // 确保是release模式
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // 移除无效的isSigningReady属性
         }
     }
 
