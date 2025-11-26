@@ -29,8 +29,7 @@
         android:roundIcon="@android:drawable/ic_media_play"
         android:supportsRtl="true"
         android:theme="@style/Theme.LyricFloat"
-        android:name=".LyricFloatApp"
-        android:multidexEnabled="true"> <!-- 启用Multidex -->
+        android:multidexEnabled="true">
 
         <!-- 主界面 -->
         <activity
