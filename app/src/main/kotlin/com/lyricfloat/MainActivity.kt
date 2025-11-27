@@ -31,7 +31,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var debugModeBtn: Button
     private lateinit var scanLocalBtn: Button
     
-    private var lyricService: FloatLyricService? = null
+    // 只声明一次lyricService变量（修复重复声明问题）
     private var lyricService: FloatLyricService? = null
     private var isServiceBound = false
     private var isDebugMode = false
@@ -60,7 +60,7 @@ class MainActivity : AppCompatActivity() {
         debugModeBtn = findViewById(R.id.debug_mode_btn)
         scanLocalBtn = findViewById(R.id.scan_local_btn)
         
-        // 保存MainActivity实例到Application（修复Context可空问题）
+        // 保存MainActivity实例到Application
         (application as LyricFloatApp).mainActivity = this
         
         // 加载设置页面
@@ -73,7 +73,7 @@ class MainActivity : AppCompatActivity() {
             checkOverlayPermission()
         }
         
-        // 绑定服务（传递非空Context）
+        // 绑定服务
         Intent(this@MainActivity, FloatLyricService::class.java).also { intent ->
             bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
         }
@@ -118,14 +118,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    // 扫描本地歌曲并下载歌词（公开方法，供SettingsFragment调用）
+    // 扫描本地歌曲并下载歌词
     fun scanLocalSongs() {
         scanLocalBtn.isEnabled = false
         scanLocalBtn.text = "扫描中..."
         updateStatus("正在扫描本地歌曲...")
         
         CoroutineScope(Dispatchers.IO).launch {
-            // 传递非空Context（this@MainActivity而非context）
+            // 传递非空Context（修复Context类型不匹配）
             val scanner = LocalMusicScanner(this@MainActivity)
             val musicList = scanner.scanLocalMusic()
             
@@ -217,6 +217,7 @@ class MainActivity : AppCompatActivity() {
     fun updateStatus(message: String) {
         runOnUiThread {
             statusText.text = message
+            statusText.text = message
         }
     }
 
@@ -245,7 +246,6 @@ class MainActivity : AppCompatActivity() {
             
             // 歌词源优先级设置
             findPreference<ListPreference>("lyric_source_priority")?.setOnPreferenceChangeListener { _, _ ->
-                // 可在此添加歌词源优先级切换逻辑
                 true
             }
             
@@ -271,7 +271,6 @@ class MainActivity : AppCompatActivity() {
             // 自定义文本颜色设置
             findPreference<EditTextPreference>("custom_text_color")?.setOnPreferenceChangeListener { _, newValue ->
                 val color = newValue as String
-                // 验证颜色格式
                 if ((color.startsWith("#") && (color.length == 7 || color.length == 9)) || 
                     color.matches(Regex("^[0-9a-fA-F]{6}$")) || color.matches(Regex("^[0-9a-fA-F]{8}$"))) {
                     val finalColor = if (color.startsWith("#")) color else "#$color"
@@ -292,7 +291,6 @@ class MainActivity : AppCompatActivity() {
             
             // 自动缓存歌词开关
             findPreference<Preference>("auto_cache_lyrics")?.setOnPreferenceChangeListener { _, _ ->
-                // 可在此添加自动缓存逻辑切换
                 true
             }
             
