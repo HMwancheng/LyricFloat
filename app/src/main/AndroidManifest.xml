@@ -16,15 +16,13 @@
     <application
         android:name=".LyricFloatApp"
         android:allowBackup="true"
-        android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@android:drawable/ic_media_play"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@android:drawable/ic_media_play"
         android:supportsRtl="true"
-        android:theme="@style/Theme.LyricFloat"
+        android:theme="@style/Theme.AppCompat.Light.DarkActionBar"
         android:requestLegacyExternalStorage="true"
-        tools:targetApi="31">
+        tools:replace="android:icon,android:roundIcon">
         
         <activity
             android:name=".MainActivity"
@@ -39,7 +37,7 @@
         <activity
             android:name=".FilePickerActivity"
             android:exported="false"
-            android:theme="@style/Theme.LyricFloat" />
+            android:theme="@style/Theme.AppCompat.Light.DarkActionBar" />
         
         <!-- 悬浮窗服务 -->
         <service
