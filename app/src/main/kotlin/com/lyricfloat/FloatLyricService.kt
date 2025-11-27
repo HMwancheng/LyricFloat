@@ -20,9 +20,9 @@ import kotlinx.coroutines.launch
 
 class FloatLyricService : Service() {
 
-    private lateinit var windowManager: WindowManager
-    private lateinit var floatView: View
-    private lateinit var lyricTextView: TextView
+    private var windowManager: WindowManager? = null
+    private var floatView: View? = null
+    private var lyricTextView: TextView? = null
     private var lastX = 0f
     private var lastY = 0f
 
@@ -37,13 +37,61 @@ class FloatLyricService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel()
-        startForeground(NOTIFICATION_ID, createNotification())
-        initFloatView()
-        mediaMonitor.startMonitoring()
+        try {
+            createNotificationChannel()
+            startForeground(NOTIFICATION_ID, createNotification()) // 5秒内必须调用
+            initFloatViewSafely() // 安全初始化悬浮窗
+            mediaMonitor.startMonitoring()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            stopSelf() // 初始化失败则停止服务
+        }
     }
 
-    // 1. 真实创建通知渠道（Android O+必需）
+    // 安全初始化悬浮窗，添加异常捕获
+    private fun initFloatViewSafely() {
+        try {
+            windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+            floatView = LayoutInflater.from(this).inflate(R.layout.float_lyric_view, null)
+            lyricTextView = floatView?.findViewById(R.id.lyric_text)
+
+            val layoutParams = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY // Android O+正确类型
+                else
+                    @Suppress("DEPRECATION")
+                    WindowManager.LayoutParams.TYPE_PHONE,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT
+            )
+
+            floatView?.setOnTouchListener { _, event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        lastX = event.rawX - layoutParams.x
+                        lastY = event.rawY - layoutParams.y
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        layoutParams.x = (event.rawX - lastX).toInt()
+                        layoutParams.y = (event.rawY - lastY).toInt()
+                        windowManager?.updateViewLayout(floatView, layoutParams)
+                    }
+                }
+                true
+            }
+
+            windowManager?.addView(floatView, layoutParams)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // 悬浮窗创建失败，提示用户
+            GlobalScope.launch(Dispatchers.Main) {
+                lyricTextView?.text = "悬浮窗创建失败，请检查权限"
+            }
+        }
+    }
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -59,7 +107,6 @@ class FloatLyricService : Service() {
         }
     }
 
-    // 2. 创建前台服务通知
     private fun createNotification(): Notification {
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
@@ -76,49 +123,9 @@ class FloatLyricService : Service() {
             .build()
     }
 
-    // 3. 初始化悬浮窗
-    private fun initFloatView() {
-        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        floatView = LayoutInflater.from(this).inflate(R.layout.float_lyric_view, null)
-        lyricTextView = floatView.findViewById(R.id.lyric_text)
-
-        val layoutParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT
-        )
-
-        // 拖拽逻辑
-        floatView.setOnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    lastX = event.rawX - layoutParams.x
-                    lastY = event.rawY - layoutParams.y
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    layoutParams.x = (event.rawX - lastX).toInt()
-                    layoutParams.y = (event.rawY - lastY).toInt()
-                    windowManager.updateViewLayout(floatView, layoutParams)
-                }
-            }
-            true
-        }
-
-        windowManager.addView(floatView, layoutParams)
-    }
-
-    // 4. 更新歌词显示（使用GlobalScope替代lifecycleScope）
     private fun updateLyricDisplay(playbackState: AppPlaybackState) {
         if (playbackState.isPlaying) {
-            // 检查歌曲切换
             if (currentLyric?.title != playbackState.title || currentLyric?.artist != playbackState.artist) {
-                // 使用IO线程解析歌词
                 GlobalScope.launch(Dispatchers.IO) {
                     currentLyric = lyricManager.parseLocalLyric(playbackState.title, playbackState.artist)
                     if (currentLyric == null) {
@@ -127,25 +134,24 @@ class FloatLyricService : Service() {
                 }
             }
 
-            // 更新UI（主线程）
             currentLyric?.let { lyric ->
                 val currentLine = lyricManager.getCurrentLyricLine(lyric, playbackState.position)
                 GlobalScope.launch(Dispatchers.Main) {
-                    lyricTextView.text = currentLine?.text ?: "${playbackState.title}\n${playbackState.artist}"
+                    lyricTextView?.text = currentLine?.text ?: "${playbackState.title}\n${playbackState.artist}"
                 }
             } ?: run {
-                lyricTextView.text = "${playbackState.title}\n${playbackState.artist}"
+                lyricTextView?.text = "${playbackState.title}\n${playbackState.artist}"
             }
         } else {
-            lyricTextView.text = "未播放音乐"
+            lyricTextView?.text = "未播放音乐"
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         mediaMonitor.stopMonitoring()
-        if (::windowManager.isInitialized && ::floatView.isInitialized) {
-            windowManager.removeView(floatView)
+        floatView?.let { view ->
+            windowManager?.removeView(view) // 安全移除悬浮窗
         }
     }
 
