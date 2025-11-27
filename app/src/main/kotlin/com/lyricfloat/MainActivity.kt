@@ -41,7 +41,7 @@ class MainActivity : AppCompatActivity() {
     private val selectedFolders = mutableListOf<String>()
     private lateinit var scannedMusicList: List<LocalMusicScanner.MusicInfo>
     
-    // 延迟初始化Service连接
+    // Service连接回调
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
             val binder = service as FloatLyricService.LocalBinder
@@ -49,7 +49,7 @@ class MainActivity : AppCompatActivity() {
             isServiceBound = true
             updateStatus("已连接到歌词服务")
             
-            // 只有在调试模式下才设置测试歌词
+            // 仅在调试模式下设置测试歌词
             if (isDebugMode) {
                 lyricService?.setTestLyric("初始化测试", "测试歌手")
             }
@@ -65,7 +65,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // 初始化控件（确保所有控件都存在）
+        // 初始化UI控件（带异常处理）
         try {
             statusText = findViewById(R.id.status_text)
             debugModeBtn = findViewById(R.id.debug_mode_btn)
@@ -73,14 +73,14 @@ class MainActivity : AppCompatActivity() {
             manualSelectBtn = findViewById(R.id.manual_select_btn)
             resultBtn = findViewById(R.id.result_btn)
             
-            // 隐藏结果按钮
+            // 默认隐藏结果按钮
             resultBtn.visibility = android.view.View.GONE
         } catch (e: Exception) {
             e.printStackTrace()
-            Toast.makeText(this, "控件初始化失败", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "UI初始化失败", Toast.LENGTH_SHORT).show()
         }
         
-        // 保存MainActivity实例（安全处理）
+        // 保存MainActivity实例到Application
         (application as LyricFloatApp).mainActivity = this
         
         // 加载设置页面
@@ -97,72 +97,70 @@ class MainActivity : AppCompatActivity() {
         updateStatus("正在检查权限...")
         checkPermissions()
         
-        // 设置按钮点击事件（禁用需要权限的按钮）
+        // 设置按钮点击事件
         setupButtonListeners()
         disablePermissionDependentButtons()
     }
     
-    // 禁用需要权限的按钮
+    // 禁用依赖权限的按钮
     private fun disablePermissionDependentButtons() {
         scanLocalBtn.isEnabled = false
         manualSelectBtn.isEnabled = false
         debugModeBtn.isEnabled = false
     }
     
-    // 启用需要权限的按钮
+    // 启用权限相关按钮
     private fun enablePermissionDependentButtons() {
         scanLocalBtn.isEnabled = true
         manualSelectBtn.isEnabled = true
         debugModeBtn.isEnabled = true
     }
     
+    // 权限检查逻辑
     private fun checkPermissions() {
-        // 先检查存储权限（这是最关键的）
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO) 
-                != PackageManager.PERMISSION_GRANTED) {
-                requestStoragePermission()
-                return
-            }
+        // 优先检查存储权限
+        val storageGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED
         } else {
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) 
-                != PackageManager.PERMISSION_GRANTED) {
-                requestStoragePermission()
-                return
-            }
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+        }
+        
+        if (!storageGranted) {
+            requestStoragePermission()
+            return
         }
         
         // 存储权限已授予，检查悬浮窗权限
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             requestOverlayPermission()
         } else {
-            // 所有权限已授予，初始化服务
+            // 所有权限就绪，初始化服务
             initializeService()
             enablePermissionDependentButtons()
         }
     }
     
+    // 请求存储权限
     private fun requestStoragePermission() {
         AlertDialog.Builder(this)
             .setTitle("需要存储权限")
             .setMessage("应用需要访问音频文件的权限才能扫描歌曲和下载歌词")
             .setPositiveButton("授予") { _, _ ->
-                ActivityCompat.requestPermissions(
-                    this,
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        arrayOf(Manifest.permission.READ_MEDIA_AUDIO)
-                    } else {
-                        arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                    },
-                    STORAGE_PERMISSION_REQUEST_CODE
-                )
+                val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    arrayOf(Manifest.permission.READ_MEDIA_AUDIO)
+                } else {
+                    arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                }
+                ActivityCompat.requestPermissions(this, permissions, STORAGE_PERMISSION_REQUEST_CODE)
             }
             .setNegativeButton("取消") { _, _ ->
                 finish() // 用户拒绝权限，退出应用
             }
+            .setCancelable(false)
             .show()
     }
     
+    // 请求悬浮窗权限
     private fun requestOverlayPermission() {
         AlertDialog.Builder(this)
             .setTitle("需要悬浮窗权限")
@@ -178,28 +176,31 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
     
-    // 初始化服务（安全启动）
+    // 初始化Service（安全模式）
     private fun initializeService() {
         try {
-            // 先启动服务
             val serviceIntent = Intent(this, FloatLyricService::class.java)
+            
+            // Android O+ 需要前台服务
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(serviceIntent)
             } else {
                 startService(serviceIntent)
             }
             
-            // 再绑定服务
-            bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
+            // 避免重复绑定
+            if (!isServiceBound) {
+                bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
+            }
             
             updateStatus("服务初始化成功")
-            enablePermissionDependentButtons()
         } catch (e: Exception) {
             e.printStackTrace()
-            updateStatus("服务启动失败：${e.message}")
+            updateStatus("服务启动失败：${e.message?.take(20)}")
         }
     }
     
+    // 按钮点击事件设置
     private fun setupButtonListeners() {
         // 调试模式按钮
         debugModeBtn.setOnClickListener {
@@ -220,7 +221,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         
-        // 扫描本地歌曲按钮
+        // 扫描按钮
         scanLocalBtn.setOnClickListener {
             if (selectedFolders.isEmpty()) {
                 Toast.makeText(this, "请先选择要扫描的文件夹", Toast.LENGTH_SHORT).show()
@@ -228,35 +229,23 @@ class MainActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             
-            if (checkStoragePermission()) {
-                scanSelectedFolders()
-            } else {
-                requestStoragePermission()
-            }
+            scanSelectedFolders()
         }
         
-        // 手动选择文件夹按钮
+        // 选择文件夹按钮
         manualSelectBtn.setOnClickListener {
-            if (checkStoragePermission()) {
-                val intent = Intent(this, FilePickerActivity::class.java)
-                startActivityForResult(intent, 1003)
-            } else {
-                requestStoragePermission()
-            }
+            val intent = Intent(this, FilePickerActivity::class.java)
+            startActivityForResult(intent, 1003)
         }
         
         // 刷新歌词按钮
-        try {
-            findViewById<Button>(R.id.refresh_lyric_btn).setOnClickListener {
-                if (isServiceBound) {
-                    lyricService?.refreshCurrentLyric()
-                    updateStatus("正在刷新歌词...")
-                } else {
-                    Toast.makeText(this, "服务未连接", Toast.LENGTH_SHORT).show()
-                }
+        findViewById<Button>(R.id.refresh_lyric_btn)?.setOnClickListener {
+            if (isServiceBound) {
+                lyricService?.refreshCurrentLyric()
+                updateStatus("正在刷新歌词...")
+            } else {
+                Toast.makeText(this, "服务未连接", Toast.LENGTH_SHORT).show()
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
         
         // 查看结果按钮
@@ -272,20 +261,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    private fun checkStoragePermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED
-        } else {
-            ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
-        }
-    }
-    
+    // 扫描选中的文件夹
     private fun scanSelectedFolders() {
-        if (selectedFolders.isEmpty()) {
-            Toast.makeText(this, "请先选择文件夹", Toast.LENGTH_SHORT).show()
-            return
-        }
-        
         scanLocalBtn.isEnabled = false
         scanLocalBtn.text = "扫描中..."
         resultBtn.visibility = android.view.View.GONE
@@ -322,6 +299,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
+    // 批量下载歌词
     private fun downloadLyricsForScannedSongs() {
         scanLocalBtn.isEnabled = false
         scanLocalBtn.text = "下载中..."
@@ -342,6 +320,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
+    // 更新状态文本
     fun updateStatus(message: String) {
         try {
             runOnUiThread {
@@ -352,38 +331,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        
-        if (requestCode == OVERLAY_PERMISSION_REQUEST_CODE) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
-                updateStatus("悬浮窗权限已授予")
-                initializeService()
-            } else {
-                updateStatus("未授予悬浮窗权限")
-            }
-        } else if (requestCode == 1003 && resultCode == RESULT_OK) {
-            // 获取选中的文件夹
-            val folders = data?.getStringArrayListExtra("selected_folders")
-            folders?.let {
-                selectedFolders.clear()
-                selectedFolders.addAll(it)
-                updateStatus("已选择 ${it.size} 个文件夹")
-                
-                if (it.isNotEmpty()) {
-                    scanLocalBtn.text = "扫描选中文件夹(${it.size})"
-                    scanLocalBtn.isEnabled = true
-                }
-            }
-        }
-    }
-
+    // 权限请求结果处理
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        
         if (requestCode == STORAGE_PERMISSION_REQUEST_CODE) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 updateStatus("存储权限已授予")
@@ -411,16 +366,49 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Activity结果处理
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        
+        if (requestCode == OVERLAY_PERMISSION_REQUEST_CODE) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
+                updateStatus("悬浮窗权限已授予，正在显示悬浮窗...")
+                // 手动触发悬浮窗创建
+                lyricService?.recreateFloatingWindow()
+            } else {
+                updateStatus("未授予悬浮窗权限，悬浮窗无法显示")
+            }
+        } else if (requestCode == 1003 && resultCode == RESULT_OK) {
+            // 获取选中的文件夹
+            val folders = data?.getStringArrayListExtra("selected_folders")
+            folders?.let {
+                selectedFolders.clear()
+                selectedFolders.addAll(it)
+                updateStatus("已选择 ${it.size} 个文件夹")
+                
+                if (it.isNotEmpty()) {
+                    scanLocalBtn.text = "扫描选中文件夹(${it.size})"
+                    scanLocalBtn.isEnabled = true
+                }
+            }
+        }
+    }
+
+    // 销毁时解绑Service
     override fun onDestroy() {
         super.onDestroy()
         try {
-            unbindService(serviceConnection)
+            if (isServiceBound) {
+                unbindService(serviceConnection)
+                isServiceBound = false
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
         (application as LyricFloatApp).mainActivity = null
     }
 
+    // 设置Fragment
     class SettingsFragment : PreferenceFragmentCompat() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             try {
@@ -493,6 +481,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         
+        // 清除歌词缓存
         private fun clearLyricCache() {
             try {
                 val lyricDir = File(android.os.Environment.getExternalStorageDirectory(), "Lyrics")
