@@ -32,6 +32,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var scanLocalBtn: Button
     
     private var lyricService: FloatLyricService? = null
+    private var lyricService: FloatLyricService? = null
     private var isServiceBound = false
     private var isDebugMode = false
     
@@ -59,7 +60,7 @@ class MainActivity : AppCompatActivity() {
         debugModeBtn = findViewById(R.id.debug_mode_btn)
         scanLocalBtn = findViewById(R.id.scan_local_btn)
         
-        // 保存MainActivity实例到Application
+        // 保存MainActivity实例到Application（修复Context可空问题）
         (application as LyricFloatApp).mainActivity = this
         
         // 加载设置页面
@@ -72,8 +73,8 @@ class MainActivity : AppCompatActivity() {
             checkOverlayPermission()
         }
         
-        // 绑定服务
-        Intent(this, FloatLyricService::class.java).also { intent ->
+        // 绑定服务（传递非空Context）
+        Intent(this@MainActivity, FloatLyricService::class.java).also { intent ->
             bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
         }
         
@@ -117,13 +118,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    // 扫描本地歌曲并下载歌词
+    // 扫描本地歌曲并下载歌词（公开方法，供SettingsFragment调用）
     fun scanLocalSongs() {
         scanLocalBtn.isEnabled = false
         scanLocalBtn.text = "扫描中..."
         updateStatus("正在扫描本地歌曲...")
         
         CoroutineScope(Dispatchers.IO).launch {
+            // 传递非空Context（this@MainActivity而非context）
             val scanner = LocalMusicScanner(this@MainActivity)
             val musicList = scanner.scanLocalMusic()
             
@@ -296,7 +298,9 @@ class MainActivity : AppCompatActivity() {
             
             // 扫描本地歌曲设置项点击事件
             findPreference<Preference>("scan_local_songs")?.setOnPreferenceClickListener {
-                (activity as MainActivity).scanLocalSongs()
+                activity?.let { act ->
+                    (act as MainActivity).scanLocalSongs()
+                }
                 true
             }
             
