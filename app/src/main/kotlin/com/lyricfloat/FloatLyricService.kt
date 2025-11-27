@@ -16,6 +16,9 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.view.animation.AlphaAnimation
+import android.view.animation.Animation
+import android.view.animation.TranslateAnimation
 import android.widget.TextView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -58,10 +61,13 @@ class FloatLyricService : Service() {
     private val debugRunnable = object : Runnable {
         override fun run() {
             currentDebugLine = (currentDebugLine + 1) % debugLyrics.size
-            lyricTextView?.text = debugLyrics[currentDebugLine]
+            updateLyricWithAnimation(debugLyrics[currentDebugLine])
             debugHandler.postDelayed(this, 2000) // 每2秒切换一行
         }
     }
+
+    // 动画相关
+    private var currentAnimationType = "fade"
 
     inner class LocalBinder : Binder() {
         fun getService(): FloatLyricService = this@FloatLyricService
@@ -98,6 +104,10 @@ class FloatLyricService : Service() {
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT
             )
+
+            // 设置初始位置（屏幕中间偏下）
+            layoutParams.x = 0
+            layoutParams.y = 500
 
             // 悬浮窗拖拽逻辑
             floatView?.setOnTouchListener { _, event ->
@@ -174,7 +184,8 @@ class FloatLyricService : Service() {
             currentLyric?.let { lyric ->
                 val currentLine = lyricManager.getCurrentLyricLine(lyric, playbackState.position)
                 GlobalScope.launch(Dispatchers.Main) {
-                    lyricTextView?.text = currentLine?.text ?: "${playbackState.title}\n${playbackState.artist}"
+                    val displayText = currentLine?.text ?: "${playbackState.title}\n${playbackState.artist}"
+                    updateLyricWithAnimation(displayText)
                     
                     // 同步更新MainActivity的状态
                     (application as LyricFloatApp).mainActivity?.updateStatus(
@@ -182,14 +193,57 @@ class FloatLyricService : Service() {
                     )
                 }
             } ?: run {
-                lyricTextView?.text = "${playbackState.title}\n${playbackState.artist}"
+                val displayText = "${playbackState.title}\n${playbackState.artist}"
+                updateLyricWithAnimation(displayText)
+                
                 (application as LyricFloatApp).mainActivity?.updateStatus(
                     "未找到歌词：${playbackState.title} - ${playbackState.artist}"
                 )
             }
         } else {
-            lyricTextView?.text = "未播放音乐"
+            updateLyricWithAnimation("未播放音乐")
             (application as LyricFloatApp).mainActivity?.updateStatus("未检测到播放")
+        }
+    }
+
+    // 带动画更新歌词
+    private fun updateLyricWithAnimation(text: String) {
+        val textView = lyricTextView ?: return
+        
+        when (currentAnimationType) {
+            "fade" -> {
+                val fadeOut = AlphaAnimation(1.0f, 0.0f)
+                fadeOut.duration = 200
+                fadeOut.setAnimationListener(object : Animation.AnimationListener {
+                    override fun onAnimationStart(animation: Animation) {}
+                    override fun onAnimationEnd(animation: Animation) {
+                        textView.text = text
+                        val fadeIn = AlphaAnimation(0.0f, 1.0f)
+                        fadeIn.duration = 200
+                        textView.startAnimation(fadeIn)
+                    }
+                    override fun onAnimationRepeat(animation: Animation) {}
+                })
+                textView.startAnimation(fadeOut)
+            }
+            "slide" -> {
+                val slideOut = TranslateAnimation(0f, -50f, 0f, 0f)
+                slideOut.duration = 200
+                slideOut.setAnimationListener(object : Animation.AnimationListener {
+                    override fun onAnimationStart(animation: Animation) {}
+                    override fun onAnimationEnd(animation: Animation) {
+                        textView.text = text
+                        val slideIn = TranslateAnimation(50f, 0f, 0f, 0f)
+                        slideIn.duration = 200
+                        textView.startAnimation(slideIn)
+                    }
+                    override fun onAnimationRepeat(animation: Animation) {}
+                })
+                textView.startAnimation(slideOut)
+            }
+            else -> {
+                textView.text = text
+            }
         }
     }
 
@@ -199,11 +253,11 @@ class FloatLyricService : Service() {
         if (enable) {
             mediaMonitor.stopMonitoring()
             debugHandler.post(debugRunnable)
-            lyricTextView?.text = debugLyrics[0]
+            updateLyricWithAnimation(debugLyrics[0])
         } else {
             debugHandler.removeCallbacks(debugRunnable)
             mediaMonitor.startMonitoring()
-            lyricTextView?.text = "未播放音乐"
+            updateLyricWithAnimation("未播放音乐")
         }
     }
 
@@ -229,6 +283,11 @@ class FloatLyricService : Service() {
             e.printStackTrace()
             lyricTextView?.setTextColor(Color.WHITE) // 默认白色
         }
+    }
+
+    // 设置动画类型
+    fun setAnimationType(type: String) {
+        currentAnimationType = type
     }
 
     override fun onBind(intent: Intent): IBinder {
