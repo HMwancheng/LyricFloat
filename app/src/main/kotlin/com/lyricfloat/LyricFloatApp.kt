@@ -7,11 +7,6 @@ class LyricFloatApp : Application() {
     
     override fun onCreate() {
         super.onCreate()
-        instance = this
-    }
-    
-    companion object {
-        lateinit var instance: LyricFloatApp
-            private set
+        // 初始化操作放在这里，避免空指针
     }
 }
