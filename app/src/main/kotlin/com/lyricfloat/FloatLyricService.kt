@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
@@ -304,7 +305,7 @@ class FloatLyricService : Service() {
     }
 }
 
-// 媒体播放状态数据类
+// 媒体播放状态数据类（只声明一次）
 data class AppPlaybackState(
     val title: String,
     val artist: String,
@@ -312,11 +313,10 @@ data class AppPlaybackState(
     val isPlaying: Boolean
 )
 
-// 媒体监控类（简化实现，实际可通过AudioManager或媒体库监听）
+// 媒体监控类（简化实现，只声明一次）
 class MediaMonitor(private val context: Context, private val callback: (AppPlaybackState) -> Unit) {
     fun startMonitoring() {
-        // 实际项目中可通过MediaBrowserServiceCompat或AudioManager监听播放状态
-        // 此处为示例，模拟播放状态
+        // 简化实现：模拟播放状态（实际项目可扩展为真实媒体监听）
         callback.invoke(AppPlaybackState("测试歌曲", "测试歌手", 0, false))
     }
 
