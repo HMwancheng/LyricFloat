@@ -7,6 +7,7 @@ import android.content.ServiceConnection
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.os.Environment
 import android.provider.Settings
 import android.view.View
 import android.widget.Button
@@ -14,10 +15,14 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.preference.EditTextPreference
+import androidx.preference.ListPreference
+import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
     private val OVERLAY_PERMISSION_REQUEST_CODE = 1001
@@ -113,7 +118,7 @@ class MainActivity : AppCompatActivity() {
     }
     
     // 扫描本地歌曲并下载歌词
-    private fun scanLocalSongs() {
+    fun scanLocalSongs() {
         scanLocalBtn.isEnabled = false
         scanLocalBtn.text = "扫描中..."
         updateStatus("正在扫描本地歌曲...")
@@ -236,18 +241,94 @@ class MainActivity : AppCompatActivity() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.root_preferences, rootKey)
             
-            // 字体大小设置
-            findPreference<androidx.preference.ListPreference>("lyric_font_size")?.setOnPreferenceChangeListener { _, newValue ->
-                val size = (newValue as String).toInt()
-                (activity as MainActivity).lyricService?.setLyricFontSize(size)
+            // 歌词源优先级设置
+            findPreference<ListPreference>("lyric_source_priority")?.setOnPreferenceChangeListener { _, _ ->
+                // 可在此添加歌词源优先级切换逻辑
                 true
             }
             
-            // 歌词颜色设置
-            findPreference<androidx.preference.ListPreference>("lyric_color")?.setOnPreferenceChangeListener { _, newValue ->
-                val color = newValue as String
-                (activity as MainActivity).lyricService?.setLyricColor(color)
+            // 文本颜色模式设置
+            findPreference<ListPreference>("text_color_mode")?.setOnPreferenceChangeListener { _, newValue ->
+                val colorMode = newValue as String
+                val activity = activity as MainActivity
+                when (colorMode) {
+                    "auto", "light" -> {
+                        activity.lyricService?.setLyricColor("#FFFFFF")
+                    }
+                    "dark" -> {
+                        activity.lyricService?.setLyricColor("#000000")
+                    }
+                    "custom" -> {
+                        val customColor = findPreference<EditTextPreference>("custom_text_color")?.text ?: "#FFFFFF"
+                        activity.lyricService?.setLyricColor(customColor)
+                    }
+                }
                 true
+            }
+            
+            // 自定义文本颜色设置
+            findPreference<EditTextPreference>("custom_text_color")?.setOnPreferenceChangeListener { _, newValue ->
+                val color = newValue as String
+                // 验证颜色格式
+                if ((color.startsWith("#") && (color.length == 7 || color.length == 9)) || 
+                    color.matches(Regex("^[0-9a-fA-F]{6}$")) || color.matches(Regex("^[0-9a-fA-F]{8}$"))) {
+                    val finalColor = if (color.startsWith("#")) color else "#$color"
+                    (activity as MainActivity).lyricService?.setLyricColor(finalColor)
+                    true
+                } else {
+                    Toast.makeText(context, "请输入有效的颜色值（如#FFFFFF）", Toast.LENGTH_SHORT).show()
+                    false
+                }
+            }
+            
+            // 动画类型设置
+            findPreference<ListPreference>("animation_type")?.setOnPreferenceChangeListener { _, newValue ->
+                val animationType = newValue as String
+                (activity as MainActivity).lyricService?.setAnimationType(animationType)
+                true
+            }
+            
+            // 自动缓存歌词开关
+            findPreference<Preference>("auto_cache_lyrics")?.setOnPreferenceChangeListener { _, _ ->
+                // 可在此添加自动缓存逻辑切换
+                true
+            }
+            
+            // 扫描本地歌曲设置项点击事件
+            findPreference<Preference>("scan_local_songs")?.setOnPreferenceClickListener {
+                (activity as MainActivity).scanLocalSongs()
+                true
+            }
+            
+            // 清除缓存设置项点击事件
+            findPreference<Preference>("clear_cache")?.setOnPreferenceClickListener {
+                AlertDialog.Builder(context)
+                    .setTitle("清除缓存")
+                    .setMessage("确定要清除所有歌词缓存吗？")
+                    .setPositiveButton("确定") { _, _ ->
+                        clearLyricCache()
+                        Toast.makeText(context, "缓存已清除", Toast.LENGTH_SHORT).show()
+                    }
+                    .setNegativeButton("取消", null)
+                    .show()
+                true
+            }
+        }
+        
+        // 清除歌词缓存
+        private fun clearLyricCache() {
+            try {
+                val lyricDir = File(Environment.getExternalStorageDirectory(), "Lyrics")
+                if (lyricDir.exists() && lyricDir.isDirectory) {
+                    lyricDir.listFiles()?.forEach { file ->
+                        if (file.name.endsWith(".lrc") && file.isFile) {
+                            file.delete()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(context, "清除缓存失败：${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }
