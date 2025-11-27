@@ -19,7 +19,7 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    # 关键：在CI环境中生成debug.keystore（与build.gradle配置一致）
+    # 生成debug.keystore（项目根目录）
     - name: Generate debug keystore
       run: |
         keytool -genkey -v \
@@ -32,8 +32,9 @@ jobs:
           -keypass android \
           -dname "CN=Android Debug,O=Android,C=US"
 
+    # 使用全局gradle命令（替代gradlew）
     - name: Build Release APK
-      run: ./gradlew assembleRelease --no-daemon
+      run: gradle assembleRelease --no-daemon
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
