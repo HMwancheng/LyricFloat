@@ -9,9 +9,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
-import android.os.Environment
 import android.provider.Settings
-import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
@@ -35,12 +33,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var debugModeBtn: Button
     private lateinit var scanLocalBtn: Button
     private lateinit var manualSelectBtn: Button
+    private lateinit var resultBtn: Button
     
     private var lyricService: FloatLyricService? = null
     private var isServiceBound = false
     private var isDebugMode = false
+    private val selectedFolders = mutableListOf<String>()
+    private lateinit var scannedMusicList: List<LocalMusicScanner.MusicInfo>
     
-    // Service连接
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
             val binder = service as FloatLyricService.LocalBinder
@@ -48,7 +48,6 @@ class MainActivity : AppCompatActivity() {
             isServiceBound = true
             updateStatus("已连接到歌词服务")
             
-            // 连接成功后立即设置测试歌词
             lyricService?.setTestLyric("初始化测试", "测试歌手")
         }
 
@@ -67,8 +66,12 @@ class MainActivity : AppCompatActivity() {
         debugModeBtn = findViewById(R.id.debug_mode_btn)
         scanLocalBtn = findViewById(R.id.scan_local_btn)
         manualSelectBtn = findViewById(R.id.manual_select_btn)
+        resultBtn = findViewById(R.id.result_btn)
         
-        // 保存MainActivity实例到Application
+        // 隐藏结果按钮
+        resultBtn.visibility = android.view.View.GONE
+        
+        // 保存MainActivity实例
         (application as LyricFloatApp).mainActivity = this
         
         // 加载设置页面
@@ -79,16 +82,15 @@ class MainActivity : AppCompatActivity() {
         // 检查权限
         checkPermissions()
         
-        // 绑定服务
-        Intent(this@MainActivity, FloatLyricService::class.java).also { intent ->
-            bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
-        }
+        // 启动并绑定服务
+        startService(Intent(this, FloatLyricService::class.java))
+        bindService(Intent(this, FloatLyricService::class.java), 
+            serviceConnection, Context.BIND_AUTO_CREATE)
         
         // 设置按钮点击事件
         setupButtonListeners()
     }
     
-    // 检查所有必要权限
     private fun checkPermissions() {
         // 检查悬浮窗权限
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
@@ -117,7 +119,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    // 请求悬浮窗权限
     private fun requestOverlayPermission() {
         AlertDialog.Builder(this)
             .setTitle("需要悬浮窗权限")
@@ -145,27 +146,33 @@ class MainActivity : AppCompatActivity() {
             }
             
             isDebugMode = !isDebugMode
+            lyricService?.setDebugMode(isDebugMode)
+            
             if (isDebugMode) {
                 debugModeBtn.text = "退出调试"
-                lyricService?.setDebugMode(true)
                 updateStatus("调试模式已开启 - 显示测试歌词")
             } else {
                 debugModeBtn.text = "调试模式"
-                lyricService?.setDebugMode(false)
                 updateStatus("调试模式已关闭 - 监听实际播放")
             }
         }
         
         // 扫描本地歌曲按钮
         scanLocalBtn.setOnClickListener {
+            if (selectedFolders.isEmpty()) {
+                Toast.makeText(this, "请先选择要扫描的文件夹", Toast.LENGTH_SHORT).show()
+                manualSelectBtn.performClick()
+                return@setOnClickListener
+            }
+            
             if (checkStoragePermission()) {
-                scanLocalSongs()
+                scanSelectedFolders()
             } else {
                 requestStoragePermission()
             }
         }
         
-        // 手动选择文件按钮
+        // 手动选择文件夹按钮
         manualSelectBtn.setOnClickListener {
             if (checkStoragePermission()) {
                 val intent = Intent(this, FilePickerActivity::class.java)
@@ -180,14 +187,19 @@ class MainActivity : AppCompatActivity() {
             if (isServiceBound) {
                 lyricService?.refreshCurrentLyric()
                 updateStatus("正在刷新歌词...")
-                lyricService?.setTestLyric("刷新测试", "测试歌手")
             } else {
                 Toast.makeText(this, "服务未连接", Toast.LENGTH_SHORT).show()
             }
         }
+        
+        // 查看结果按钮
+        resultBtn.setOnClickListener {
+            val intent = Intent(this, MusicListActivity::class.java)
+            intent.putExtra(MusicListActivity.EXTRA_MUSIC_LIST, ArrayList(scannedMusicList))
+            startActivity(intent)
+        }
     }
     
-    // 检查存储权限（修复后：确保返回Boolean类型，语法正确）
     private fun checkStoragePermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -196,7 +208,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    // 请求存储权限
     private fun requestStoragePermission() {
         ActivityCompat.requestPermissions(
             this,
@@ -209,80 +220,68 @@ class MainActivity : AppCompatActivity() {
         )
     }
     
-    // 扫描本地歌曲
-    fun scanLocalSongs() {
+    private fun scanSelectedFolders() {
+        if (selectedFolders.isEmpty()) {
+            Toast.makeText(this, "请先选择文件夹", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
         scanLocalBtn.isEnabled = false
         scanLocalBtn.text = "扫描中..."
-        updateStatus("正在扫描本地歌曲...")
+        resultBtn.visibility = android.view.View.GONE
+        updateStatus("正在扫描 ${selectedFolders.size} 个文件夹...")
         
         CoroutineScope(Dispatchers.IO).launch {
             val scanner = LocalMusicScanner(this@MainActivity)
-            val musicList = scanner.scanLocalMusic()
+            scannedMusicList = scanner.scanSelectedFolders(selectedFolders)
             
             runOnUiThread {
-                updateStatus("找到 ${musicList.size} 首本地歌曲")
+                updateStatus("扫描完成：找到 ${scannedMusicList.size} 首歌曲")
                 
-                if (musicList.isEmpty()) {
+                if (scannedMusicList.isNotEmpty()) {
+                    resultBtn.visibility = android.view.View.VISIBLE
+                    
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("扫描完成")
+                        .setMessage("找到 ${scannedMusicList.size} 首歌曲，是否批量下载歌词？")
+                        .setPositiveButton("下载") { _, _ ->
+                            downloadLyricsForScannedSongs()
+                        }
+                        .setNegativeButton("取消", null)
+                        .setNeutralButton("查看列表") { _, _ ->
+                            resultBtn.performClick()
+                        }
+                        .show()
+                } else {
                     Toast.makeText(this@MainActivity, "未找到音乐文件", Toast.LENGTH_SHORT).show()
-                    scanLocalBtn.isEnabled = true
-                    scanLocalBtn.text = "扫描本地歌曲"
-                    return@runOnUiThread
                 }
                 
-                AlertDialog.Builder(this@MainActivity)
-                    .setTitle("扫描完成")
-                    .setMessage("找到 ${musicList.size} 首歌曲，是否批量下载歌词？")
-                    .setPositiveButton("下载") { _, _ ->
-                        downloadLyricsForLocalSongs(musicList)
-                    }
-                    .setNegativeButton("取消", null)
-                    .show()
-                
                 scanLocalBtn.isEnabled = true
-                scanLocalBtn.text = "扫描本地歌曲"
+                scanLocalBtn.text = "扫描选中文件夹"
             }
         }
     }
     
-    // 批量下载歌词
-    private fun downloadLyricsForLocalSongs(musicList: List<LocalMusicScanner.MusicInfo>) {
+    private fun downloadLyricsForScannedSongs() {
         scanLocalBtn.isEnabled = false
         scanLocalBtn.text = "下载中..."
         updateStatus("正在下载歌词...")
         
         CoroutineScope(Dispatchers.IO).launch {
             val scanner = LocalMusicScanner(this@MainActivity)
-            val successCount = scanner.batchDownloadLyrics(musicList)
+            val successCount = scanner.batchDownloadLyrics(scannedMusicList)
             
             runOnUiThread {
-                updateStatus("歌词下载完成：成功 $successCount/${musicList.size}")
+                updateStatus("歌词下载完成：成功 $successCount/${scannedMusicList.size}")
                 Toast.makeText(this@MainActivity, 
                     "成功下载 $successCount 首歌词", Toast.LENGTH_LONG).show()
                 
                 scanLocalBtn.isEnabled = true
-                scanLocalBtn.text = "扫描本地歌曲"
+                scanLocalBtn.text = "扫描选中文件夹"
             }
         }
     }
     
-    // 安全启动Service
-    private fun startFloatServiceSafely() {
-        try {
-            Intent(this, FloatLyricService::class.java).also { intent ->
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startForegroundService(intent)
-                } else {
-                    startService(intent)
-                }
-                updateStatus("悬浮窗服务已启动")
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            updateStatus("启动失败：${e.message}")
-        }
-    }
-    
-    // 更新状态栏文本
     fun updateStatus(message: String) {
         runOnUiThread {
             statusText.text = message
@@ -291,37 +290,30 @@ class MainActivity : AppCompatActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        
         if (requestCode == OVERLAY_PERMISSION_REQUEST_CODE) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
-                startFloatServiceSafely()
                 updateStatus("悬浮窗权限已授予")
+                lyricService?.let {
+                    // 重启服务以创建悬浮窗
+                    stopService(Intent(this, FloatLyricService::class.java))
+                    startService(Intent(this, FloatLyricService::class.java))
+                }
             } else {
                 updateStatus("未授予悬浮窗权限")
             }
         } else if (requestCode == 1003 && resultCode == RESULT_OK) {
-            // 处理文件选择结果
-            data?.getStringExtra("selected_file")?.let { filePath ->
-                updateStatus("已选择文件：$filePath")
-                CoroutineScope(Dispatchers.IO).launch {
-                    val scanner = LocalMusicScanner(this@MainActivity)
-                    val musicInfo = scanner.getMusicInfoFromFile(filePath)
-                    musicInfo?.let { info ->
-                        val success = scanner.downloadLyricForSong(info)
-                        runOnUiThread {
-                            if (success) {
-                                updateStatus("歌词下载成功")
-                                lyricService?.setTestLyric(info.title, info.artist)
-                            } else {
-                                updateStatus("歌词下载失败")
-                            }
-                        }
-                    }
+            // 获取选中的文件夹
+            val folders = data?.getStringArrayListExtra("selected_folders")
+            folders?.let {
+                selectedFolders.clear()
+                selectedFolders.addAll(it)
+                updateStatus("已选择 ${it.size} 个文件夹")
+                
+                if (it.isNotEmpty()) {
+                    scanLocalBtn.text = "扫描选中文件夹(${it.size})"
+                    scanLocalBtn.isEnabled = true
                 }
-            }
-        } else if (requestCode == 1004 && resultCode == RESULT_OK) {
-            // 处理目录选择结果
-            data?.getStringExtra("selected_directory")?.let { dirPath ->
-                updateStatus("缓存目录已设置为：$dirPath")
             }
         }
     }
@@ -336,7 +328,7 @@ class MainActivity : AppCompatActivity() {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 updateStatus("存储权限已授予")
             } else {
-                updateStatus("未授予存储权限，无法扫描本地歌曲")
+                updateStatus("未授予存储权限，无法扫描歌曲")
             }
         }
     }
@@ -351,7 +343,6 @@ class MainActivity : AppCompatActivity() {
         (application as LyricFloatApp).mainActivity = null
     }
 
-    // 设置Fragment
     class SettingsFragment : PreferenceFragmentCompat() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.root_preferences, rootKey)
@@ -397,33 +388,10 @@ class MainActivity : AppCompatActivity() {
                 true
             }
             
-            // 缓存目录设置
-            findPreference<Preference>("cache_directory")?.setOnPreferenceClickListener {
-                val activity = activity as MainActivity
-                val currentDir = Environment.getExternalStorageDirectory().absolutePath + "/Lyrics"
-                
-                AlertDialog.Builder(requireContext())
-                    .setTitle("缓存目录")
-                    .setMessage("当前缓存目录：$currentDir\n\n是否更改？")
-                    .setPositiveButton("选择目录") { _, _ ->
-                        val intent = Intent(activity, FilePickerActivity::class.java)
-                        intent.putExtra("select_directory", true)
-                        activity.startActivityForResult(intent, 1004)
-                    }
-                    .setNegativeButton("取消", null)
-                    .show()
-                true
-            }
-            
-            // 自动缓存歌词开关
-            findPreference<Preference>("auto_cache_lyrics")?.setOnPreferenceChangeListener { _, _ ->
-                true
-            }
-            
             // 扫描本地歌曲设置项
             findPreference<Preference>("scan_local_songs")?.setOnPreferenceClickListener {
                 activity?.let { act ->
-                    (act as MainActivity).scanLocalSongs()
+                    (act as MainActivity).scanLocalBtn.performClick()
                 }
                 true
             }
@@ -443,10 +411,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
         
-        // 清除歌词缓存
         private fun clearLyricCache() {
             try {
-                val lyricDir = File(Environment.getExternalStorageDirectory(), "Lyrics")
+                val lyricDir = File(android.os.Environment.getExternalStorageDirectory(), "Lyrics")
                 if (lyricDir.exists() && lyricDir.isDirectory) {
                     lyricDir.listFiles()?.forEach { file ->
                         if (file.name.endsWith(".lrc") && file.isFile) {
