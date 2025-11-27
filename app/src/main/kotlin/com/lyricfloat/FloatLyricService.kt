@@ -27,104 +27,133 @@ import java.util.Timer
 import java.util.TimerTask
 
 class FloatLyricService : Service() {
-    private lateinit var windowManager: WindowManager
+    private var windowManager: WindowManager? = null
     private var floatingView: View? = null
     private var isDebugMode = false
     
-    private lateinit var mediaSessionManager: MediaSessionManager
+    private var mediaSessionManager: MediaSessionManager? = null
     private var mediaController: MediaController? = null
     private var testSongTimer: Timer? = null
     
-    // Binder for activity communication（修复：继承自Binder类）
+    // Binder for activity communication
     inner class LocalBinder : Binder() {
         fun getService(): FloatLyricService = this@FloatLyricService
     }
     
-    private val binder = LocalBinder() // 创建binder实例
+    private val binder = LocalBinder()
     
     override fun onBind(intent: Intent): IBinder {
-        return binder // 返回binder实例
+        return binder
     }
 
     override fun onCreate() {
         super.onCreate()
         
-        // 创建通知通道（前台服务必需）
+        // 先创建通知通道，确保前台服务能正常启动
         createNotificationChannel()
         
-        // 启动为前台服务
+        // 启动为前台服务（必须）
         startForeground(1, createNotification())
         
-        // 初始化悬浮窗
-        createFloatingWindow()
-        
-        // 初始化媒体监听
-        initMediaListener()
+        // 延迟初始化，避免启动时闪退
+        Handler(Looper.getMainLooper()).postDelayed({
+            try {
+                // 初始化悬浮窗（安全模式）
+                createFloatingWindowSafely()
+                
+                // 初始化媒体监听
+                initMediaListenerSafely()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }, 1000)
     }
     
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                "lyric_service_channel",
-                "Lyric Service",
-                NotificationManager.IMPORTANCE_LOW
-            )
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
+            try {
+                val channel = NotificationChannel(
+                    "lyric_service_channel",
+                    "Lyric Service",
+                    NotificationManager.IMPORTANCE_LOW
+                )
+                val manager = getSystemService(NotificationManager::class.java)
+                manager.createNotificationChannel(channel)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
     
     private fun createNotification(): Notification {
-        return NotificationCompat.Builder(this, "lyric_service_channel")
-            .setContentTitle("LyricFloat")
-            .setContentText("歌词服务正在运行")
-            .setSmallIcon(android.R.drawable.ic_media_play)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
+        return try {
+            NotificationCompat.Builder(this, "lyric_service_channel")
+                .setContentTitle("LyricFloat")
+                .setContentText("歌词服务正在运行")
+                .setSmallIcon(android.R.drawable.ic_media_play)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .build()
+        } catch (e: Exception) {
+            // 降级处理
+            NotificationCompat.Builder(this)
+                .setContentTitle("LyricFloat")
+                .setContentText("歌词服务正在运行")
+                .setSmallIcon(android.R.drawable.ic_media_play)
+                .build()
+        }
     }
     
-    private fun createFloatingWindow() {
+    // 安全创建悬浮窗
+    private fun createFloatingWindowSafely() {
         // 检查悬浮窗权限
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            // 通知MainActivity请求权限
-            (application as LyricFloatApp).mainActivity?.updateStatus("需要悬浮窗权限才能显示歌词")
+            // 不立即创建悬浮窗，等待权限授予
+            updateStatus("需要悬浮窗权限才能显示歌词")
             return
         }
         
-        // 设置悬浮窗参数
-        val layoutParams = WindowManager.LayoutParams().apply {
-            type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            } else {
-                WindowManager.LayoutParams.TYPE_PHONE
+        try {
+            // 设置悬浮窗参数
+            val layoutParams = WindowManager.LayoutParams().apply {
+                type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                } else {
+                    WindowManager.LayoutParams.TYPE_PHONE
+                }
+                
+                gravity = Gravity.TOP or Gravity.START
+                x = 100
+                y = 200
+                width = WindowManager.LayoutParams.WRAP_CONTENT
+                height = WindowManager.LayoutParams.WRAP_CONTENT
+                
+                flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                        WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
+                
+                format = PixelFormat.TRANSLUCENT
             }
             
-            gravity = Gravity.TOP or Gravity.START
-            x = 100
-            y = 200
-            width = WindowManager.LayoutParams.WRAP_CONTENT
-            height = WindowManager.LayoutParams.WRAP_CONTENT
+            // 创建悬浮窗视图
+            floatingView = LayoutInflater.from(this).inflate(R.layout.floating_window, null)
+            val lyricText = floatingView?.findViewById<TextView>(R.id.lyric_text)
+            lyricText?.text = "等待播放..."
             
-            flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                    WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
+            // 获取WindowManager
+            windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
             
-            format = PixelFormat.TRANSLUCENT
-        }
-        
-        // 创建悬浮窗视图
-        floatingView = LayoutInflater.from(this).inflate(R.layout.floating_window, null)
-        val lyricText = floatingView?.findViewById<TextView>(R.id.lyric_text)
-        lyricText?.text = "等待播放..."
-        
-        // 添加到WindowManager
-        windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        try {
-            windowManager.addView(floatingView, layoutParams)
-            setupDragListener(floatingView!!, layoutParams)
+            // 添加到WindowManager
+            windowManager?.addView(floatingView, layoutParams)
+            
+            // 设置拖动监听
+            floatingView?.let {
+                setupDragListener(it, layoutParams)
+            }
+            
+            updateStatus("悬浮窗已创建")
         } catch (e: Exception) {
             e.printStackTrace()
-            (application as LyricFloatApp).mainActivity?.updateStatus("悬浮窗创建失败：${e.message}")
+            updateStatus("悬浮窗创建失败：${e.message}")
         }
     }
     
@@ -136,27 +165,32 @@ class FloatLyricService : Service() {
             private var initialTouchY = 0f
             
             override fun onTouch(v: View, event: MotionEvent): Boolean {
-                when (event.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        initialX = params.x
-                        initialY = params.y
-                        initialTouchX = event.rawX
-                        initialTouchY = event.rawY
-                        return true
+                try {
+                    when (event.action) {
+                        MotionEvent.ACTION_DOWN -> {
+                            initialX = params.x
+                            initialY = params.y
+                            initialTouchX = event.rawX
+                            initialTouchY = event.rawY
+                            return true
+                        }
+                        MotionEvent.ACTION_MOVE -> {
+                            params.x = initialX + (event.rawX - initialTouchX).toInt()
+                            params.y = initialY + (event.rawY - initialTouchY).toInt()
+                            windowManager?.updateViewLayout(v, params)
+                            return true
+                        }
                     }
-                    MotionEvent.ACTION_MOVE -> {
-                        params.x = initialX + (event.rawX - initialTouchX).toInt()
-                        params.y = initialY + (event.rawY - initialTouchY).toInt()
-                        windowManager.updateViewLayout(v, params)
-                        return true
-                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
                 return false
             }
         })
     }
     
-    private fun initMediaListener() {
+    // 安全初始化媒体监听
+    private fun initMediaListenerSafely() {
         try {
             mediaSessionManager = getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
             
@@ -176,11 +210,11 @@ class FloatLyricService : Service() {
                 }
             }
             
-            mediaSessionManager.addOnActiveSessionsChangedListener(callback, null)
+            mediaSessionManager?.addOnActiveSessionsChangedListener(callback, null)
             
             // 初始检查
-            val activeSessions = mediaSessionManager.getActiveSessions(null)
-            if (activeSessions.isNotEmpty()) {
+            val activeSessions = mediaSessionManager?.getActiveSessions(null)
+            if (activeSessions?.isNotEmpty() == true) {
                 mediaController = activeSessions[0]
                 registerMediaControllerCallback()
                 updateMediaInfo()
@@ -222,7 +256,7 @@ class FloatLyricService : Service() {
             stopTestSongLoop()
             
             // 更新状态
-            (application as LyricFloatApp).mainActivity?.updateStatus("正在播放：$title - $artist")
+            updateStatus("正在播放：$title - $artist")
         } ?: run {
             startTestSongLoop()
         }
@@ -247,9 +281,13 @@ class FloatLyricService : Service() {
     }
     
     fun setLyricColor(color: String) {
-        floatingView?.findViewById<TextView>(R.id.lyric_text)?.setTextColor(
-            android.graphics.Color.parseColor(color)
-        )
+        try {
+            floatingView?.findViewById<TextView>(R.id.lyric_text)?.setTextColor(
+                android.graphics.Color.parseColor(color)
+            )
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
     
     fun setAnimationType(type: String) {
@@ -257,7 +295,11 @@ class FloatLyricService : Service() {
     }
     
     private fun updateFloatingWindow(text: String) {
-        floatingView?.findViewById<TextView>(R.id.lyric_text)?.text = text
+        try {
+            floatingView?.findViewById<TextView>(R.id.lyric_text)?.text = text
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
     
     private fun startTestSongLoop() {
@@ -279,9 +321,21 @@ class FloatLyricService : Service() {
         testSongTimer = null
     }
     
+    private fun updateStatus(message: String) {
+        try {
+            (application as LyricFloatApp).mainActivity?.updateStatus(message)
+        } catch (e: Exception) {
+            // 静默失败，不影响应用运行
+        }
+    }
+    
     override fun onDestroy() {
         super.onDestroy()
         stopTestSongLoop()
-        floatingView?.let { windowManager.removeView(it) }
+        try {
+            floatingView?.let { windowManager?.removeView(it) }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 }
