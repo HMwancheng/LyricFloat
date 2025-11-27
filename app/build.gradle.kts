@@ -7,10 +7,10 @@ android {
     namespace = "com.lyricfloat"
     compileSdk = 34
 
-    // 签名配置：使用项目内的debug.keystore（CI环境可生成）
+    // 修正keystore路径：指向项目根目录的debug.keystore（app模块外）
     signingConfigs {
         create("release") {
-            storeFile = file("debug.keystore") // 项目根目录的keystore
+            storeFile = file("../debug.keystore") // 关键：从app目录指向项目根目录
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
@@ -21,11 +21,11 @@ android {
 
     defaultConfig {
         applicationId = "com.lyricfloat"
-        minSdk = 29 // 与DSL一致，消除manifest警告
+        minSdk = 29 // Android 10+无需MultiDex
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-        multiDexEnabled = false
+        // 移除multiDexEnabled = false（默认关闭，无需声明）
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -74,6 +74,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("androidx.preference:preference-ktx:1.2.1")
+    // 移除multidex依赖（Android 10+无需）
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
