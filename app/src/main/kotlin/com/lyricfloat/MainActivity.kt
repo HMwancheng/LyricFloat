@@ -17,7 +17,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
@@ -311,19 +310,24 @@ class MainActivity : AppCompatActivity() {
                 CoroutineScope(Dispatchers.IO).launch {
                     val scanner = LocalMusicScanner(this@MainActivity)
                     val musicInfo = scanner.getMusicInfoFromFile(filePath)
-                    musicInfo?.let {
-                        val success = scanner.downloadLyricForSong(it)
+                    musicInfo?.let { info ->
+                        val success = scanner.downloadLyricForSong(info)
                         runOnUiThread {
                             if (success) {
                                 updateStatus("歌词下载成功")
                                 // 显示下载的歌词
-                                lyricService?.setTestLyric(it.title, it.artist)
+                                lyricService?.setTestLyric(info.title, info.artist)
                             } else {
                                 updateStatus("歌词下载失败")
                             }
                         }
                     }
                 }
+            }
+        } else if (requestCode == 1004 && resultCode == RESULT_OK) {
+            // 处理目录选择结果
+            data?.getStringExtra("selected_directory")?.let { dirPath ->
+                updateStatus("缓存目录已设置为：$dirPath")
             }
         }
     }
