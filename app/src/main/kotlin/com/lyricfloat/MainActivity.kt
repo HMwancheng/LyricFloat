@@ -1,10 +1,12 @@
 package com.lyricfloat
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.View // 补充View的导入
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -22,8 +24,8 @@ class MainActivity : AppCompatActivity() {
             .replace(R.id.settings_container, SettingsFragment())
             .commit()
 
-        // 延迟检查权限（避免Activity未完全创建时请求）
-        findViewById<View>(android.R.id.content).post {
+        // 修正延迟检查权限的写法（使用Activity的window.decorView，更可靠）
+        window.decorView.post {
             checkOverlayPermission()
         }
     }
@@ -46,19 +48,18 @@ class MainActivity : AppCompatActivity() {
                     }
                     .show()
             } else {
-                startFloatServiceSafely() // 已有权限，安全启动服务
+                startFloatServiceSafely()
             }
         } else {
-            startFloatServiceSafely() // 低版本无需权限
+            startFloatServiceSafely()
         }
     }
 
-    // 安全启动Service，添加异常捕获
     private fun startFloatServiceSafely() {
         try {
             Intent(this, FloatLyricService::class.java).also { intent ->
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startForegroundService(intent) // Android O+需前台服务
+                    startForegroundService(intent)
                 } else {
                     startService(intent)
                 }
@@ -70,12 +71,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // 权限申请回调
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == OVERLAY_PERMISSION_REQUEST_CODE) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
-                startFloatServiceSafely() // 权限授予后再启动
+                startFloatServiceSafely()
             } else {
                 Toast.makeText(this, "未开启悬浮窗权限，无法使用悬浮窗功能", Toast.LENGTH_SHORT).show()
             }
