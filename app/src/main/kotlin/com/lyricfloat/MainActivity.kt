@@ -66,7 +66,7 @@ class MainActivity : AppCompatActivity() {
         statusText = findViewById(R.id.status_text)
         debugModeBtn = findViewById(R.id.debug_mode_btn)
         scanLocalBtn = findViewById(R.id.scan_local_btn)
-        manualSelectBtn = findViewById(R.id.manual_select_btn) // 新增手动选择按钮
+        manualSelectBtn = findViewById(R.id.manual_select_btn)
         
         // 保存MainActivity实例到Application
         (application as LyricFloatApp).mainActivity = this
@@ -137,7 +137,7 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun setupButtonListeners() {
-        // 调试模式按钮（修复版）
+        // 调试模式按钮
         debugModeBtn.setOnClickListener {
             if (!isServiceBound) {
                 Toast.makeText(this, "服务未连接", Toast.LENGTH_SHORT).show()
@@ -156,7 +156,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         
-        // 扫描本地歌曲按钮（增强版）
+        // 扫描本地歌曲按钮
         scanLocalBtn.setOnClickListener {
             if (checkStoragePermission()) {
                 scanLocalSongs()
@@ -180,8 +180,6 @@ class MainActivity : AppCompatActivity() {
             if (isServiceBound) {
                 lyricService?.refreshCurrentLyric()
                 updateStatus("正在刷新歌词...")
-                
-                // 手动触发测试歌词更新
                 lyricService?.setTestLyric("刷新测试", "测试歌手")
             } else {
                 Toast.makeText(this, "服务未连接", Toast.LENGTH_SHORT).show()
@@ -189,14 +187,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    // 检查存储权限（修复返回类型错误）
+    // 检查存储权限（修复后：确保返回Boolean类型，语法正确）
     private fun checkStoragePermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO) 
-                == PackageManager.PERMISSION_GRANTED
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED
         } else {
-            ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) 
-                == PackageManager.PERMISSION_GRANTED
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
         }
     }
     
@@ -213,7 +209,7 @@ class MainActivity : AppCompatActivity() {
         )
     }
     
-    // 扫描本地歌曲并下载歌词（增强版）
+    // 扫描本地歌曲
     fun scanLocalSongs() {
         scanLocalBtn.isEnabled = false
         scanLocalBtn.text = "扫描中..."
@@ -233,7 +229,6 @@ class MainActivity : AppCompatActivity() {
                     return@runOnUiThread
                 }
                 
-                // 显示确认对话框
                 AlertDialog.Builder(this@MainActivity)
                     .setTitle("扫描完成")
                     .setMessage("找到 ${musicList.size} 首歌曲，是否批量下载歌词？")
@@ -307,7 +302,6 @@ class MainActivity : AppCompatActivity() {
             // 处理文件选择结果
             data?.getStringExtra("selected_file")?.let { filePath ->
                 updateStatus("已选择文件：$filePath")
-                // 解析文件信息并下载歌词
                 CoroutineScope(Dispatchers.IO).launch {
                     val scanner = LocalMusicScanner(this@MainActivity)
                     val musicInfo = scanner.getMusicInfoFromFile(filePath)
@@ -316,7 +310,6 @@ class MainActivity : AppCompatActivity() {
                         runOnUiThread {
                             if (success) {
                                 updateStatus("歌词下载成功")
-                                // 显示下载的歌词
                                 lyricService?.setTestLyric(info.title, info.artist)
                             } else {
                                 updateStatus("歌词下载失败")
@@ -373,12 +366,8 @@ class MainActivity : AppCompatActivity() {
                 val colorMode = newValue as String
                 val activity = activity as MainActivity
                 when (colorMode) {
-                    "auto", "light" -> {
-                        activity.lyricService?.setLyricColor("#FFFFFF")
-                    }
-                    "dark" -> {
-                        activity.lyricService?.setLyricColor("#000000")
-                    }
+                    "auto", "light" -> activity.lyricService?.setLyricColor("#FFFFFF")
+                    "dark" -> activity.lyricService?.setLyricColor("#000000")
                     "custom" -> {
                         val customColor = findPreference<EditTextPreference>("custom_text_color")?.text ?: "#FFFFFF"
                         activity.lyricService?.setLyricColor(customColor)
@@ -408,7 +397,7 @@ class MainActivity : AppCompatActivity() {
                 true
             }
             
-            // 缓存目录设置（新增）
+            // 缓存目录设置
             findPreference<Preference>("cache_directory")?.setOnPreferenceClickListener {
                 val activity = activity as MainActivity
                 val currentDir = Environment.getExternalStorageDirectory().absolutePath + "/Lyrics"
@@ -417,7 +406,6 @@ class MainActivity : AppCompatActivity() {
                     .setTitle("缓存目录")
                     .setMessage("当前缓存目录：$currentDir\n\n是否更改？")
                     .setPositiveButton("选择目录") { _, _ ->
-                        // 打开文件选择器选择目录
                         val intent = Intent(activity, FilePickerActivity::class.java)
                         intent.putExtra("select_directory", true)
                         activity.startActivityForResult(intent, 1004)
@@ -432,7 +420,7 @@ class MainActivity : AppCompatActivity() {
                 true
             }
             
-            // 扫描本地歌曲设置项点击事件
+            // 扫描本地歌曲设置项
             findPreference<Preference>("scan_local_songs")?.setOnPreferenceClickListener {
                 activity?.let { act ->
                     (act as MainActivity).scanLocalSongs()
@@ -440,7 +428,7 @@ class MainActivity : AppCompatActivity() {
                 true
             }
             
-            // 清除缓存设置项点击事件
+            // 清除缓存设置项
             findPreference<Preference>("clear_cache")?.setOnPreferenceClickListener {
                 AlertDialog.Builder(requireContext())
                     .setTitle("清除缓存")
