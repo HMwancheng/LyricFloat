@@ -31,7 +31,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var debugModeBtn: Button
     private lateinit var scanLocalBtn: Button
     
-    // 只声明一次lyricService变量（修复重复声明问题）
+    // 只声明一次lyricService变量
     private var lyricService: FloatLyricService? = null
     private var isServiceBound = false
     private var isDebugMode = false
@@ -125,7 +125,7 @@ class MainActivity : AppCompatActivity() {
         updateStatus("正在扫描本地歌曲...")
         
         CoroutineScope(Dispatchers.IO).launch {
-            // 传递非空Context（修复Context类型不匹配）
+            // 传递非空Context
             val scanner = LocalMusicScanner(this@MainActivity)
             val musicList = scanner.scanLocalMusic()
             
@@ -217,7 +217,6 @@ class MainActivity : AppCompatActivity() {
     fun updateStatus(message: String) {
         runOnUiThread {
             statusText.text = message
-            statusText.text = message
         }
     }
 
@@ -304,7 +303,7 @@ class MainActivity : AppCompatActivity() {
             
             // 清除缓存设置项点击事件
             findPreference<Preference>("clear_cache")?.setOnPreferenceClickListener {
-                AlertDialog.Builder(context)
+                AlertDialog.Builder(requireContext())  // 使用requireContext()获取非空Context
                     .setTitle("清除缓存")
                     .setMessage("确定要清除所有歌词缓存吗？")
                     .setPositiveButton("确定") { _, _ ->
@@ -317,7 +316,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         
-        // 清除歌词缓存
+        // 清除歌词缓存（修复Context问题）
         private fun clearLyricCache() {
             try {
                 val lyricDir = File(Environment.getExternalStorageDirectory(), "Lyrics")
