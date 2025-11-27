@@ -21,8 +21,7 @@
         android:roundIcon="@android:drawable/ic_media_play"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.Light.DarkActionBar"
-        android:requestLegacyExternalStorage="true"
-        tools:replace="android:icon,android:roundIcon">
+        android:requestLegacyExternalStorage="true">
         
         <activity
             android:name=".MainActivity"
