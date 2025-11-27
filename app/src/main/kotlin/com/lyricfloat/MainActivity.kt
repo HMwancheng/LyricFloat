@@ -17,19 +17,20 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // 检查悬浮窗权限（Android M+必需）
-        checkOverlayPermission()
-
         // 加载设置页面
         supportFragmentManager.beginTransaction()
             .replace(R.id.settings_container, SettingsFragment())
             .commit()
+
+        // 延迟检查权限（避免Activity未完全创建时请求）
+        findViewById<View>(android.R.id.content).post {
+            checkOverlayPermission()
+        }
     }
 
     private fun checkOverlayPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (!Settings.canDrawOverlays(this)) {
-                // 显示权限申请提示框
                 AlertDialog.Builder(this)
                     .setTitle("需要悬浮窗权限")
                     .setMessage("应用需要悬浮窗权限才能显示歌词，请前往设置开启")
@@ -42,25 +43,30 @@ class MainActivity : AppCompatActivity() {
                     }
                     .setNegativeButton("取消") { dialog, _ ->
                         dialog.dismiss()
-                        finish() // 用户拒绝则退出应用
                     }
                     .show()
             } else {
-                startFloatService() // 已有权限，启动悬浮窗服务
+                startFloatServiceSafely() // 已有权限，安全启动服务
             }
         } else {
-            startFloatService() // 低版本无需权限，直接启动
+            startFloatServiceSafely() // 低版本无需权限
         }
     }
 
-    // 启动悬浮窗服务
-    private fun startFloatService() {
-        Intent(this, FloatLyricService::class.java).also { intent ->
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent) // Android O+需启动前台服务
-            } else {
-                startService(intent)
+    // 安全启动Service，添加异常捕获
+    private fun startFloatServiceSafely() {
+        try {
+            Intent(this, FloatLyricService::class.java).also { intent ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(intent) // Android O+需前台服务
+                } else {
+                    startService(intent)
+                }
+                Toast.makeText(this, "悬浮窗已启动", Toast.LENGTH_SHORT).show()
             }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(this, "启动失败：${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -69,15 +75,13 @@ class MainActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == OVERLAY_PERMISSION_REQUEST_CODE) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
-                startFloatService()
+                startFloatServiceSafely() // 权限授予后再启动
             } else {
-                Toast.makeText(this, "未开启悬浮窗权限，应用将退出", Toast.LENGTH_SHORT).show()
-                finish()
+                Toast.makeText(this, "未开启悬浮窗权限，无法使用悬浮窗功能", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
-    // 设置页面Fragment（可扩展歌词样式设置）
     class SettingsFragment : PreferenceFragmentCompat() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.root_preferences, rootKey)
