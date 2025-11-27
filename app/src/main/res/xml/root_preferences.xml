@@ -1,52 +1,92 @@
 <?xml version="1.0" encoding="utf-8"?>
-<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <!-- 歌词源优先级设置 -->
-    <PreferenceCategory android:title="Lyric Source Priority">
-        <ListPreference
-            android:key="lyric_source_priority"
-            android:title="Source Priority"
-            android:entries="@array/lyric_source_entries"
-            android:entryValues="@array/lyric_source_values"
-            android:defaultValue="embedded,local,network" />
-    </PreferenceCategory>
+    <!-- 歌词显示设置 -->
+    <PreferenceCategory
+        android:title="歌词显示设置">
 
-    <!-- 悬浮窗设置 -->
-    <PreferenceCategory android:title="Floating Window">
         <ListPreference
             android:key="text_color_mode"
-            android:title="Text Color Mode"
+            android:title="歌词颜色模式"
+            android:summary="选择歌词显示颜色"
             android:entries="@array/color_mode_entries"
             android:entryValues="@array/color_mode_values"
-            android:defaultValue="auto" />
-        
+            android:defaultValue="auto"/>
+
         <EditTextPreference
             android:key="custom_text_color"
-            android:title="Custom Text Color"
-            android:defaultValue="#FFFFFF" />
-            
+            android:title="自定义颜色值"
+            android:summary="输入十六进制颜色值（如#FF00FF）"
+            android:defaultValue="#FFFFFF"
+            android:dependency="text_color_mode"
+            android:enabled="false"/>
+
         <ListPreference
             android:key="animation_type"
-            android:title="Animation Type"
+            android:title="切换动画效果"
+            android:summary="选择歌词切换时的动画效果"
             android:entries="@array/animation_entries"
             android:entryValues="@array/animation_values"
-            android:defaultValue="fade" />
+            android:defaultValue="fade"/>
+
     </PreferenceCategory>
 
-    <!-- 缓存设置 -->
-    <PreferenceCategory android:title="Cache">
+    <!-- 歌词源设置 -->
+    <PreferenceCategory
+        android:title="歌词源设置">
+
+        <ListPreference
+            android:key="lyric_source_priority"
+            android:title="歌词源优先级"
+            android:summary="选择歌词获取的优先顺序"
+            android:entries="@array/lyric_source_entries"
+            android:entryValues="@array/lyric_source_values"
+            android:defaultValue="local_first"/>
+
         <SwitchPreferenceCompat
             android:key="auto_cache_lyrics"
-            android:title="Auto Cache Lyrics"
-            android:defaultValue="true" />
-            
+            android:title="自动缓存歌词"
+            android:summary="自动将在线获取的歌词保存到本地"
+            android:defaultValue="true"/>
+
+    </PreferenceCategory>
+
+    <!-- 文件管理设置 -->
+    <PreferenceCategory
+        android:title="文件管理设置">
+
+        <Preference
+            android:key="cache_directory"
+            android:title="缓存目录设置"
+            android:summary="点击选择歌词缓存保存位置"/>
+
         <Preference
             android:key="scan_local_songs"
-            android:title="Scan Local Songs and Download Lyrics" />
-            
+            android:title="扫描本地歌曲"
+            android:summary="扫描设备中的音频文件并下载歌词"/>
+
         <Preference
             android:key="clear_cache"
-            android:title="Clear Lyrics Cache" />
+            android:title="清除歌词缓存"
+            android:summary="删除所有已缓存的歌词文件"/>
+
+    </PreferenceCategory>
+
+    <!-- 关于设置 -->
+    <PreferenceCategory
+        android:title="关于">
+
+        <Preference
+            android:key="app_version"
+            android:title="版本信息"
+            android:summary="v1.0.0"/>
+
+        <Preference
+            android:key="about"
+            android:title="关于应用"
+            android:summary="歌词悬浮窗工具，提供实时歌词显示"/>
+
     </PreferenceCategory>
 
 </PreferenceScreen>
