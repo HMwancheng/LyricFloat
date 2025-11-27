@@ -1,27 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 歌词源优先级 -->
-    <string-array name="lyric_source_entries">
-        <item>嵌入式 > 本地 > 网络</item>
-        <item>本地 > 嵌入式 > 网络</item>
-        <item>网络 > 本地 > 嵌入式</item>
-        <item>仅本地</item>
-        <item>仅网络</item>
-    </string-array>
-    <string-array name="lyric_source_values">
-        <item>embedded,local,network</item>
-        <item>local,embedded,network</item>
-        <item>network,local,embedded</item>
-        <item>local</item>
-        <item>network</item>
-    </string-array>
-
-    <!-- 颜色模式 -->
+    <!-- 颜色模式选项 -->
     <string-array name="color_mode_entries">
-        <item>自动</item>
-        <item>浅色</item>
-        <item>深色</item>
-        <item>自定义</item>
+        <item>自动模式</item>
+        <item>浅色模式（白色）</item>
+        <item>深色模式（黑色）</item>
+        <item>自定义颜色</item>
     </string-array>
     <string-array name="color_mode_values">
         <item>auto</item>
@@ -30,15 +14,29 @@
         <item>custom</item>
     </string-array>
 
-    <!-- 动画类型 -->
+    <!-- 动画效果选项 -->
     <string-array name="animation_entries">
         <item>淡入淡出</item>
-        <item>滑动</item>
+        <item>滑动效果</item>
         <item>无动画</item>
     </string-array>
     <string-array name="animation_values">
         <item>fade</item>
         <item>slide</item>
         <item>none</item>
+    </string-array>
+
+    <!-- 歌词源选项 -->
+    <string-array name="lyric_source_entries">
+        <item>本地优先</item>
+        <item>在线优先</item>
+        <item>仅本地</item>
+        <item>仅在线</item>
+    </string-array>
+    <string-array name="lyric_source_values">
+        <item>local_first</item>
+        <item>online_first</item>
+        <item>local_only</item>
+        <item>online_only</item>
     </string-array>
 </resources>
