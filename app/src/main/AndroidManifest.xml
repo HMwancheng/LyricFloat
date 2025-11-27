@@ -17,7 +17,7 @@
 
     <!-- SDK版本配置 -->
     <uses-sdk
-        android:minSdkVersion="16"
+        android:minSdkVersion="29"
         android:targetSdkVersion="34"
         tools:overrideLibrary="com.google.android.material" />
 
