@@ -17,7 +17,7 @@
         android:textSize="16sp"
         android:layout_marginBottom="24dp"/>
 
-    <!-- 功能按钮区域（移除gap，用margin实现间距） -->
+    <!-- 功能按钮区域 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -30,7 +30,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="调试模式"
-            android:layout_marginEnd="8dp"/> <!-- 第一个按钮右侧间距 -->
+            android:layout_marginEnd="8dp"/>
 
         <Button
             android:id="@+id/scan_local_btn"
@@ -39,7 +39,7 @@
             android:layout_weight="1"
             android:text="扫描本地歌曲"
             android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"/> <!-- 中间按钮左右间距 -->
+            android:layout_marginEnd="8dp"/>
 
         <Button
             android:id="@+id/manual_select_btn"
@@ -47,7 +47,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="手动选择文件"
-            android:layout_marginStart="8dp"/> <!-- 最后一个按钮左侧间距 -->
+            android:layout_marginStart="8dp"/>
 
     </LinearLayout>
 
