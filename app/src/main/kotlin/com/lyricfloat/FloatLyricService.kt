@@ -63,7 +63,7 @@ class FloatLyricService : Service() {
         override fun run() {
             currentDebugLine = (currentDebugLine + 1) % debugLyrics.size
             updateLyricWithAnimation(debugLyrics[currentDebugLine])
-            debugHandler.postDelayed(this, 2000) // 每2秒切换一行
+            debugHandler.postDelayed(this, 2000)
         }
     }
 
@@ -170,7 +170,7 @@ class FloatLyricService : Service() {
 
     // 更新歌词显示
     private fun updateLyricDisplay(playbackState: AppPlaybackState) {
-        if (isDebugMode) return // 调试模式下不更新歌词
+        if (isDebugMode) return
 
         if (playbackState.isPlaying) {
             if (currentLyric?.title != playbackState.title || currentLyric?.artist != playbackState.artist) {
@@ -188,7 +188,6 @@ class FloatLyricService : Service() {
                     val displayText = currentLine?.text ?: "${playbackState.title}\n${playbackState.artist}"
                     updateLyricWithAnimation(displayText)
                     
-                    // 同步更新MainActivity的状态
                     (application as LyricFloatApp).mainActivity?.updateStatus(
                         "正在播放：${playbackState.title} - ${playbackState.artist}"
                     )
@@ -282,7 +281,7 @@ class FloatLyricService : Service() {
             lyricTextView?.setTextColor(color)
         } catch (e: Exception) {
             e.printStackTrace()
-            lyricTextView?.setTextColor(Color.WHITE) // 默认白色
+            lyricTextView?.setTextColor(Color.WHITE)
         }
     }
 
@@ -305,7 +304,7 @@ class FloatLyricService : Service() {
     }
 }
 
-// 媒体播放状态数据类（只声明一次）
+// 媒体播放状态数据类
 data class AppPlaybackState(
     val title: String,
     val artist: String,
@@ -313,10 +312,10 @@ data class AppPlaybackState(
     val isPlaying: Boolean
 )
 
-// 媒体监控类（简化实现，只声明一次）
+// 媒体监控类
 class MediaMonitor(private val context: Context, private val callback: (AppPlaybackState) -> Unit) {
     fun startMonitoring() {
-        // 简化实现：模拟播放状态（实际项目可扩展为真实媒体监听）
+        // 简化实现：模拟播放状态
         callback.invoke(AppPlaybackState("测试歌曲", "测试歌手", 0, false))
     }
 
