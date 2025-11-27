@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.os.Environment
 import java.io.File
+import java.nio.charset.Charset
 import java.util.Locale
 
 class LocalMusicScanner(private val context: Context) {
@@ -40,6 +41,34 @@ class LocalMusicScanner(private val context: Context) {
         return musicList.distinctBy { it.path }
     }
     
+    // 新增：从单个文件获取音乐信息（MainActivity调用）
+    fun getMusicInfoFromFile(filePath: String): MusicInfo? {
+        try {
+            val file = File(filePath)
+            if (!file.exists() || !isAudioFile(file)) {
+                return null
+            }
+            
+            val mmr = MediaMetadataRetriever()
+            mmr.setDataSource(file.absolutePath)
+            
+            val title = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: file.nameWithoutExtension
+            val artist = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: "未知艺术家"
+            val album = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: "未知专辑"
+            
+            return MusicInfo(
+                title = title,
+                artist = artist,
+                album = album,
+                path = file.absolutePath,
+                filePath = file.absolutePath // 兼容MainActivity的filePath字段
+            )
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return null
+        }
+    }
+    
     // 递归扫描目录
     private fun scanDirectory(dir: File, musicList: MutableList<MusicInfo>, recursive: Boolean = true) {
         dir.listFiles()?.forEach { file ->
@@ -49,8 +78,7 @@ class LocalMusicScanner(private val context: Context) {
                     scanDirectory(file, musicList)
                 }
             } else {
-                val extension = file.extension.lowercase(Locale.getDefault())
-                if (supportedFormats.contains(".$extension")) {
+                if (isAudioFile(file)) {
                     try {
                         val mmr = MediaMetadataRetriever()
                         mmr.setDataSource(file.absolutePath)
@@ -63,7 +91,8 @@ class LocalMusicScanner(private val context: Context) {
                             title = title,
                             artist = artist,
                             album = album,
-                            path = file.absolutePath
+                            path = file.absolutePath,
+                            filePath = file.absolutePath // 兼容字段
                         ))
                     } catch (e: Exception) {
                         // 跳过无法读取的文件
@@ -74,7 +103,13 @@ class LocalMusicScanner(private val context: Context) {
         }
     }
     
-    // 为单首歌曲下载歌词
+    // 判断是否为音频文件（工具方法）
+    private fun isAudioFile(file: File): Boolean {
+        val extension = file.extension.lowercase(Locale.getDefault())
+        return supportedFormats.contains(".$extension")
+    }
+    
+    // 为单首歌曲下载歌词（suspend方法）
     suspend fun downloadLyricForSong(musicInfo: MusicInfo): Boolean {
         val lyricManager = LyricManager(context)
         val lyric = lyricManager.fetchOnlineLyric(musicInfo.title, musicInfo.artist)
@@ -101,13 +136,13 @@ class LocalMusicScanner(private val context: Context) {
             val lyricDir = File(Environment.getExternalStorageDirectory(), "Lyrics")
             if (!lyricDir.exists()) lyricDir.mkdirs()
             
-            // 清理文件名特殊字符
+            // 清理文件名特殊字符（避免文件创建失败）
             val safeTitle = musicInfo.title.replace("[\\\\/:*?\"<>|]".toRegex(), "_")
             val safeArtist = musicInfo.artist.replace("[\\\\/:*?\"<>|]".toRegex(), "_")
             val lyricFile = File(lyricDir, "$safeTitle-$safeArtist.lrc")
             
             val lrcContent = buildLrcContent(lyric, musicInfo.album)
-            lyricFile.writeText(lrcContent, Charsets.UTF_8)
+            lyricFile.writeText(lrcContent, Charsets.UTF_8) // 明确指定UTF-8编码
             true
         } catch (e: Exception) {
             e.printStackTrace()
@@ -131,21 +166,22 @@ class LocalMusicScanner(private val context: Context) {
         return sb.toString()
     }
     
-    // 格式化时间为LRC格式
+    // 格式化时间为LRC格式（mm:ss.xx）
     private fun formatTime(timeMs: Long): String {
         val totalSeconds = timeMs / 1000
         val minutes = totalSeconds / 60
         val seconds = totalSeconds % 60
-        val milliseconds = timeMs % 1000 / 10
+        val milliseconds = (timeMs % 1000) / 10 // 保留两位毫秒
         
         return String.format(Locale.getDefault(), "%02d:%02d.%02d", minutes, seconds, milliseconds)
     }
     
-    // 音乐信息数据类
+    // 音乐信息数据类（新增filePath字段兼容MainActivity）
     data class MusicInfo(
         val title: String,
         val artist: String,
         val album: String,
-        val path: String
+        val path: String,
+        val filePath: String // 兼容字段，避免MainActivity报错
     )
 }
