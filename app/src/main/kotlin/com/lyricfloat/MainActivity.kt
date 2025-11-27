@@ -41,6 +41,7 @@ class MainActivity : AppCompatActivity() {
     private val selectedFolders = mutableListOf<String>()
     private lateinit var scannedMusicList: List<LocalMusicScanner.MusicInfo>
     
+    // 延迟初始化Service连接
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
             val binder = service as FloatLyricService.LocalBinder
@@ -48,7 +49,10 @@ class MainActivity : AppCompatActivity() {
             isServiceBound = true
             updateStatus("已连接到歌词服务")
             
-            lyricService?.setTestLyric("初始化测试", "测试歌手")
+            // 只有在调试模式下才设置测试歌词
+            if (isDebugMode) {
+                lyricService?.setTestLyric("初始化测试", "测试歌手")
+            }
         }
 
         override fun onServiceDisconnected(arg0: ComponentName) {
@@ -61,80 +65,139 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // 初始化控件
-        statusText = findViewById(R.id.status_text)
-        debugModeBtn = findViewById(R.id.debug_mode_btn)
-        scanLocalBtn = findViewById(R.id.scan_local_btn)
-        manualSelectBtn = findViewById(R.id.manual_select_btn)
-        resultBtn = findViewById(R.id.result_btn)
+        // 初始化控件（确保所有控件都存在）
+        try {
+            statusText = findViewById(R.id.status_text)
+            debugModeBtn = findViewById(R.id.debug_mode_btn)
+            scanLocalBtn = findViewById(R.id.scan_local_btn)
+            manualSelectBtn = findViewById(R.id.manual_select_btn)
+            resultBtn = findViewById(R.id.result_btn)
+            
+            // 隐藏结果按钮
+            resultBtn.visibility = android.view.View.GONE
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(this, "控件初始化失败", Toast.LENGTH_SHORT).show()
+        }
         
-        // 隐藏结果按钮
-        resultBtn.visibility = android.view.View.GONE
-        
-        // 保存MainActivity实例
+        // 保存MainActivity实例（安全处理）
         (application as LyricFloatApp).mainActivity = this
         
         // 加载设置页面
-        supportFragmentManager.beginTransaction()
-            .replace(R.id.settings_container, SettingsFragment())
-            .commit()
+        try {
+            supportFragmentManager.beginTransaction()
+                .replace(R.id.settings_container, SettingsFragment())
+                .commit()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            updateStatus("设置页面加载失败")
+        }
 
-        // 检查权限
+        // 先检查权限，再初始化其他功能
+        updateStatus("正在检查权限...")
         checkPermissions()
         
-        // 启动并绑定服务
-        startService(Intent(this, FloatLyricService::class.java))
-        bindService(Intent(this, FloatLyricService::class.java), 
-            serviceConnection, Context.BIND_AUTO_CREATE)
-        
-        // 设置按钮点击事件
+        // 设置按钮点击事件（禁用需要权限的按钮）
         setupButtonListeners()
+        disablePermissionDependentButtons()
+    }
+    
+    // 禁用需要权限的按钮
+    private fun disablePermissionDependentButtons() {
+        scanLocalBtn.isEnabled = false
+        manualSelectBtn.isEnabled = false
+        debugModeBtn.isEnabled = false
+    }
+    
+    // 启用需要权限的按钮
+    private fun enablePermissionDependentButtons() {
+        scanLocalBtn.isEnabled = true
+        manualSelectBtn.isEnabled = true
+        debugModeBtn.isEnabled = true
     }
     
     private fun checkPermissions() {
-        // 检查悬浮窗权限
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            requestOverlayPermission()
-        }
-        
-        // 检查存储权限
+        // 先检查存储权限（这是最关键的）
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO) 
                 != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(Manifest.permission.READ_MEDIA_AUDIO),
-                    STORAGE_PERMISSION_REQUEST_CODE
-                )
+                requestStoragePermission()
+                return
             }
         } else {
             if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) 
                 != PackageManager.PERMISSION_GRANTED) {
+                requestStoragePermission()
+                return
+            }
+        }
+        
+        // 存储权限已授予，检查悬浮窗权限
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            requestOverlayPermission()
+        } else {
+            // 所有权限已授予，初始化服务
+            initializeService()
+            enablePermissionDependentButtons()
+        }
+    }
+    
+    private fun requestStoragePermission() {
+        AlertDialog.Builder(this)
+            .setTitle("需要存储权限")
+            .setMessage("应用需要访问音频文件的权限才能扫描歌曲和下载歌词")
+            .setPositiveButton("授予") { _, _ ->
                 ActivityCompat.requestPermissions(
                     this,
-                    arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        arrayOf(Manifest.permission.READ_MEDIA_AUDIO)
+                    } else {
+                        arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    },
                     STORAGE_PERMISSION_REQUEST_CODE
                 )
             }
-        }
+            .setNegativeButton("取消") { _, _ ->
+                finish() // 用户拒绝权限，退出应用
+            }
+            .show()
     }
     
     private fun requestOverlayPermission() {
         AlertDialog.Builder(this)
             .setTitle("需要悬浮窗权限")
-            .setMessage("应用需要悬浮窗权限才能显示歌词，请前往设置开启")
-            .setPositiveButton("去设置") { _, _ ->
+            .setMessage("应用需要悬浮窗权限才能显示歌词")
+            .setPositiveButton("授予") { _, _ ->
                 val intent = Intent(
                     Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     android.net.Uri.parse("package:$packageName")
                 )
                 startActivityForResult(intent, OVERLAY_PERMISSION_REQUEST_CODE)
             }
-            .setNegativeButton("取消") { dialog, _ ->
-                dialog.dismiss()
-                updateStatus("未授予悬浮窗权限，无法显示歌词")
-            }
+            .setNegativeButton("取消", null)
             .show()
+    }
+    
+    // 初始化服务（安全启动）
+    private fun initializeService() {
+        try {
+            // 先启动服务
+            val serviceIntent = Intent(this, FloatLyricService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+            
+            // 再绑定服务
+            bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
+            
+            updateStatus("服务初始化成功")
+            enablePermissionDependentButtons()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            updateStatus("服务启动失败：${e.message}")
+        }
     }
     
     private fun setupButtonListeners() {
@@ -183,20 +246,29 @@ class MainActivity : AppCompatActivity() {
         }
         
         // 刷新歌词按钮
-        findViewById<Button>(R.id.refresh_lyric_btn).setOnClickListener {
-            if (isServiceBound) {
-                lyricService?.refreshCurrentLyric()
-                updateStatus("正在刷新歌词...")
-            } else {
-                Toast.makeText(this, "服务未连接", Toast.LENGTH_SHORT).show()
+        try {
+            findViewById<Button>(R.id.refresh_lyric_btn).setOnClickListener {
+                if (isServiceBound) {
+                    lyricService?.refreshCurrentLyric()
+                    updateStatus("正在刷新歌词...")
+                } else {
+                    Toast.makeText(this, "服务未连接", Toast.LENGTH_SHORT).show()
+                }
             }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
         
         // 查看结果按钮
         resultBtn.setOnClickListener {
-            val intent = Intent(this, MusicListActivity::class.java)
-            intent.putExtra(MusicListActivity.EXTRA_MUSIC_LIST, ArrayList(scannedMusicList))
-            startActivity(intent)
+            try {
+                val intent = Intent(this, MusicListActivity::class.java)
+                intent.putExtra(MusicListActivity.EXTRA_MUSIC_LIST, ArrayList(scannedMusicList))
+                startActivity(intent)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(this, "无法打开结果页面", Toast.LENGTH_SHORT).show()
+            }
         }
     }
     
@@ -206,18 +278,6 @@ class MainActivity : AppCompatActivity() {
         } else {
             ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
         }
-    }
-    
-    private fun requestStoragePermission() {
-        ActivityCompat.requestPermissions(
-            this,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                arrayOf(Manifest.permission.READ_MEDIA_AUDIO)
-            } else {
-                arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-            },
-            STORAGE_PERMISSION_REQUEST_CODE
-        )
     }
     
     private fun scanSelectedFolders() {
@@ -283,8 +343,12 @@ class MainActivity : AppCompatActivity() {
     }
     
     fun updateStatus(message: String) {
-        runOnUiThread {
-            statusText.text = message
+        try {
+            runOnUiThread {
+                statusText.text = message
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -294,11 +358,7 @@ class MainActivity : AppCompatActivity() {
         if (requestCode == OVERLAY_PERMISSION_REQUEST_CODE) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
                 updateStatus("悬浮窗权限已授予")
-                lyricService?.let {
-                    // 重启服务以创建悬浮窗
-                    stopService(Intent(this, FloatLyricService::class.java))
-                    startService(Intent(this, FloatLyricService::class.java))
-                }
+                initializeService()
             } else {
                 updateStatus("未授予悬浮窗权限")
             }
@@ -327,8 +387,26 @@ class MainActivity : AppCompatActivity() {
         if (requestCode == STORAGE_PERMISSION_REQUEST_CODE) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 updateStatus("存储权限已授予")
+                enablePermissionDependentButtons()
+                
+                // 检查悬浮窗权限
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+                    requestOverlayPermission()
+                } else {
+                    initializeService()
+                }
             } else {
-                updateStatus("未授予存储权限，无法扫描歌曲")
+                updateStatus("未授予存储权限，部分功能将不可用")
+                AlertDialog.Builder(this)
+                    .setTitle("权限拒绝")
+                    .setMessage("没有存储权限，应用无法扫描歌曲和下载歌词")
+                    .setPositiveButton("重新授予") { _, _ ->
+                        requestStoragePermission()
+                    }
+                    .setNegativeButton("退出") { _, _ ->
+                        finish()
+                    }
+                    .show()
             }
         }
     }
@@ -345,7 +423,11 @@ class MainActivity : AppCompatActivity() {
 
     class SettingsFragment : PreferenceFragmentCompat() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-            setPreferencesFromResource(R.xml.root_preferences, rootKey)
+            try {
+                setPreferencesFromResource(R.xml.root_preferences, rootKey)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
             
             // 歌词源优先级设置
             findPreference<ListPreference>("lyric_source_priority")?.setOnPreferenceChangeListener { _, _ ->
