@@ -2,35 +2,30 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- 核心权限 -->
+    <!-- 必要权限 -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    
-    <!-- 存储权限（兼容旧版本） -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="29" />
+        android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- SDK版本配置 -->
-    <uses-sdk
-        android:minSdkVersion="29"
-        android:targetSdkVersion="34"
-        tools:overrideLibrary="com.google.android.material" />
+    <!-- Android 13+ 媒体文件访问权限 -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
     <application
         android:name=".LyricFloatApp"
         android:allowBackup="true"
-        android:icon="@android:drawable/ic_media_play"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:roundIcon="@android:drawable/ic_media_play"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.LyricFloat"> <!-- 移除错误的multidexEnabled属性 -->
-
-        <!-- 主界面 -->
+        android:theme="@style/Theme.LyricFloat"
+        android:requestLegacyExternalStorage="true"
+        tools:targetApi="31">
+        
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -39,12 +34,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
+        
+        <!-- 文件选择器Activity -->
+        <activity
+            android:name=".FilePickerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.LyricFloat" />
+        
         <!-- 悬浮窗服务 -->
         <service
             android:name=".FloatLyricService"
-            android:exported="false"
-            android:foregroundServiceType="mediaPlayback|specialUse" /> <!-- Android 12+必需 -->
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="false" />
         
     </application>
 
