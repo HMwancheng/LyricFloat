@@ -8,7 +8,7 @@ import java.util.Locale
 
 class LocalMusicScanner(private val context: Context) {
     // 支持的音频格式
-    private val supportedFormats = listOf(".mp3", ".flac", ".wav", ".m4a", ".ogg")
+    private val supportedFormats = listOf(".mp3", ".flac", ".wav", ".m4a", ".ogg", ".ape", ".wma")
     
     // 扫描本地音乐文件
     fun scanLocalMusic(): List<MusicInfo> {
@@ -17,7 +17,9 @@ class LocalMusicScanner(private val context: Context) {
             Environment.getExternalStorageDirectory().absolutePath + "/Music",
             Environment.getExternalStorageDirectory().absolutePath + "/Download",
             Environment.getExternalStorageDirectory().absolutePath + "/网易云音乐",
-            Environment.getExternalStorageDirectory().absolutePath + "/QQ音乐"
+            Environment.getExternalStorageDirectory().absolutePath + "/QQ音乐",
+            Environment.getExternalStorageDirectory().absolutePath + "/酷狗音乐",
+            Environment.getExternalStorageDirectory().absolutePath + "/酷我音乐"
         )
         
         musicDirs.forEach { dirPath ->
@@ -86,9 +88,12 @@ class LocalMusicScanner(private val context: Context) {
             val lyricDir = File(Environment.getExternalStorageDirectory(), "Lyrics")
             if (!lyricDir.exists()) lyricDir.mkdirs()
             
-            val lyricFile = File(lyricDir, "${musicInfo.title}-${musicInfo.artist}.lrc")
-            val lrcContent = buildLrcContent(lyric)
+            // 清理文件名特殊字符
+            val safeTitle = musicInfo.title.replace("[\\\\/:*?\"<>|]".toRegex(), "_")
+            val safeArtist = musicInfo.artist.replace("[\\\\/:*?\"<>|]".toRegex(), "_")
+            val lyricFile = File(lyricDir, "$safeTitle-$safeArtist.lrc")
             
+            val lrcContent = buildLrcContent(lyric)
             lyricFile.writeText(lrcContent, Charsets.UTF_8)
             true
         } catch (e: Exception) {
@@ -122,6 +127,7 @@ class LocalMusicScanner(private val context: Context) {
         return String.format(Locale.getDefault(), "%02d:%02d.%02d", minutes, seconds, milliseconds)
     }
     
+    // 音乐信息数据类
     data class MusicInfo(
         val title: String,
         val artist: String,
