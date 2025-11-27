@@ -1,64 +1,65 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:padding="16dp"
+    tools:context=".MainActivity">
 
-    <!-- 设置内容区域 -->
-    <FrameLayout
-        android:id="@+id/settings_container"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
-
-    <!-- 底部状态栏 -->
-    <LinearLayout
-        android:id="@+id/status_bar"
+    <!-- 状态显示文本 -->
+    <TextView
+        android:id="@+id/status_text"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#F5F5F5"
-        android:padding="12dp"
-        android:orientation="horizontal">
+        android:text="应用已启动，等待连接服务..."
+        android:textSize="16sp"
+        android:layout_marginBottom="24dp"/>
 
-        <TextView
-            android:id="@+id/status_text"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="未检测到播放"
-            android:textSize="14sp" />
+    <!-- 功能按钮区域 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gap="16dp"
+        android:layout_marginBottom="24dp">
 
         <Button
             android:id="@+id/debug_mode_btn"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="调试模式"
-            android:textSize="12sp" />
-    </LinearLayout>
-
-    <!-- 功能按钮栏 -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="#EEEEEE"
-        android:padding="8dp"
-        android:orientation="horizontal">
+            android:layout_weight="1"
+            android:text="调试模式"/>
 
         <Button
             android:id="@+id/scan_local_btn"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="扫描本地歌曲"
-            android:textSize="12sp" />
+            android:text="扫描本地歌曲"/>
 
         <Button
-            android:id="@+id/refresh_lyric_btn"
+            android:id="@+id/manual_select_btn"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="刷新歌词"
-            android:textSize="12sp" />
+            android:text="手动选择文件"/>
+
     </LinearLayout>
+
+    <Button
+        android:id="@+id/refresh_lyric_btn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="刷新歌词"/>
+
+    <!-- 设置Fragment容器 -->
+    <FrameLayout
+        android:id="@+id/settings_container"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="24dp"/>
 
 </LinearLayout>
