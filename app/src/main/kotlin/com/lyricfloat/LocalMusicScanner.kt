@@ -19,7 +19,9 @@ class LocalMusicScanner(private val context: Context) {
             Environment.getExternalStorageDirectory().absolutePath + "/网易云音乐",
             Environment.getExternalStorageDirectory().absolutePath + "/QQ音乐",
             Environment.getExternalStorageDirectory().absolutePath + "/酷狗音乐",
-            Environment.getExternalStorageDirectory().absolutePath + "/酷我音乐"
+            Environment.getExternalStorageDirectory().absolutePath + "/酷我音乐",
+            Environment.getExternalStorageDirectory().absolutePath + "/虾米音乐",
+            Environment.getExternalStorageDirectory().absolutePath + "/咪咕音乐"
         )
         
         musicDirs.forEach { dirPath ->
@@ -29,13 +31,23 @@ class LocalMusicScanner(private val context: Context) {
             }
         }
         
+        // 扫描外部存储根目录下的音频文件
+        val externalDir = Environment.getExternalStorageDirectory()
+        if (externalDir.exists() && externalDir.isDirectory) {
+            scanDirectory(externalDir, musicList, recursive = false)
+        }
+        
         return musicList.distinctBy { it.path }
     }
     
-    private fun scanDirectory(dir: File, musicList: MutableList<MusicInfo>) {
+    // 递归扫描目录
+    private fun scanDirectory(dir: File, musicList: MutableList<MusicInfo>, recursive: Boolean = true) {
         dir.listFiles()?.forEach { file ->
-            if (file.isDirectory) {
-                scanDirectory(file, musicList)
+            if (file.isDirectory && recursive) {
+                // 跳过系统目录和隐藏目录
+                if (!file.name.startsWith(".") && !file.name.equals("Android", ignoreCase = true)) {
+                    scanDirectory(file, musicList)
+                }
             } else {
                 val extension = file.extension.lowercase(Locale.getDefault())
                 if (supportedFormats.contains(".$extension")) {
@@ -54,6 +66,7 @@ class LocalMusicScanner(private val context: Context) {
                             path = file.absolutePath
                         ))
                     } catch (e: Exception) {
+                        // 跳过无法读取的文件
                         e.printStackTrace()
                     }
                 }
@@ -93,7 +106,7 @@ class LocalMusicScanner(private val context: Context) {
             val safeArtist = musicInfo.artist.replace("[\\\\/:*?\"<>|]".toRegex(), "_")
             val lyricFile = File(lyricDir, "$safeTitle-$safeArtist.lrc")
             
-            val lrcContent = buildLrcContent(lyric)
+            val lrcContent = buildLrcContent(lyric, musicInfo.album)
             lyricFile.writeText(lrcContent, Charsets.UTF_8)
             true
         } catch (e: Exception) {
@@ -103,11 +116,12 @@ class LocalMusicScanner(private val context: Context) {
     }
     
     // 构建LRC格式内容
-    private fun buildLrcContent(lyric: LyricManager.Lyric): String {
+    private fun buildLrcContent(lyric: LyricManager.Lyric, album: String): String {
         val sb = StringBuilder()
         sb.append("[ti:${lyric.title}]\n")
         sb.append("[ar:${lyric.artist}]\n")
-        sb.append("[al:${lyric.album}]\n\n")
+        sb.append("[al:$album]\n")
+        sb.append("[by:LyricFloat]\n\n")
         
         lyric.lines.forEach { line ->
             val timeStr = formatTime(line.time)
