@@ -61,9 +61,11 @@ class FloatLyricService : Service() {
     private val debugHandler = Handler(Looper.getMainLooper())
     private val debugRunnable = object : Runnable {
         override fun run() {
-            currentDebugLine = (currentDebugLine + 1) % debugLyrics.size
-            updateLyricWithAnimation(debugLyrics[currentDebugLine])
-            debugHandler.postDelayed(this, 2000)
+            if (isDebugMode) { // 确保只在调试模式下运行
+                currentDebugLine = (currentDebugLine + 1) % debugLyrics.size
+                updateLyricWithAnimation(debugLyrics[currentDebugLine])
+                debugHandler.postDelayed(this, 2000) // 每2秒切换一行
+            }
         }
     }
 
@@ -170,39 +172,31 @@ class FloatLyricService : Service() {
 
     // 更新歌词显示
     private fun updateLyricDisplay(playbackState: AppPlaybackState) {
-        if (isDebugMode) return
+        if (isDebugMode) return // 调试模式下不更新歌词
 
-        if (playbackState.isPlaying) {
-            if (currentLyric?.title != playbackState.title || currentLyric?.artist != playbackState.artist) {
-                GlobalScope.launch(Dispatchers.IO) {
-                    currentLyric = lyricManager.parseLocalLyric(playbackState.title, playbackState.artist)
-                    if (currentLyric == null) {
-                        currentLyric = lyricManager.fetchOnlineLyric(playbackState.title, playbackState.artist)
-                    }
-                }
-            }
-
-            currentLyric?.let { lyric ->
-                val currentLine = lyricManager.getCurrentLyricLine(lyric, playbackState.position)
-                GlobalScope.launch(Dispatchers.Main) {
-                    val displayText = currentLine?.text ?: "${playbackState.title}\n${playbackState.artist}"
-                    updateLyricWithAnimation(displayText)
-                    
-                    (application as LyricFloatApp).mainActivity?.updateStatus(
-                        "正在播放：${playbackState.title} - ${playbackState.artist}"
-                    )
-                }
-            } ?: run {
+        GlobalScope.launch(Dispatchers.Main) {
+            if (playbackState.isPlaying) {
                 val displayText = "${playbackState.title}\n${playbackState.artist}"
                 updateLyricWithAnimation(displayText)
                 
+                // 同步更新MainActivity的状态
                 (application as LyricFloatApp).mainActivity?.updateStatus(
-                    "未找到歌词：${playbackState.title} - ${playbackState.artist}"
+                    "正在播放：${playbackState.title} - ${playbackState.artist}"
                 )
+                
+                // 后台加载歌词
+                if (currentLyric?.title != playbackState.title || currentLyric?.artist != playbackState.artist) {
+                    GlobalScope.launch(Dispatchers.IO) {
+                        currentLyric = lyricManager.parseLocalLyric(playbackState.title, playbackState.artist)
+                        if (currentLyric == null) {
+                            currentLyric = lyricManager.fetchOnlineLyric(playbackState.title, playbackState.artist)
+                        }
+                    }
+                }
+            } else {
+                updateLyricWithAnimation("未播放音乐")
+                (application as LyricFloatApp).mainActivity?.updateStatus("未检测到播放")
             }
-        } else {
-            updateLyricWithAnimation("未播放音乐")
-            (application as LyricFloatApp).mainActivity?.updateStatus("未检测到播放")
         }
     }
 
@@ -210,55 +204,64 @@ class FloatLyricService : Service() {
     private fun updateLyricWithAnimation(text: String) {
         val textView = lyricTextView ?: return
         
-        when (currentAnimationType) {
-            "fade" -> {
-                val fadeOut = AlphaAnimation(1.0f, 0.0f)
-                fadeOut.duration = 200
-                fadeOut.setAnimationListener(object : Animation.AnimationListener {
-                    override fun onAnimationStart(animation: Animation) {}
-                    override fun onAnimationEnd(animation: Animation) {
-                        textView.text = text
-                        val fadeIn = AlphaAnimation(0.0f, 1.0f)
-                        fadeIn.duration = 200
-                        textView.startAnimation(fadeIn)
-                    }
-                    override fun onAnimationRepeat(animation: Animation) {}
-                })
-                textView.startAnimation(fadeOut)
-            }
-            "slide" -> {
-                val slideOut = TranslateAnimation(0f, -50f, 0f, 0f)
-                slideOut.duration = 200
-                slideOut.setAnimationListener(object : Animation.AnimationListener {
-                    override fun onAnimationStart(animation: Animation) {}
-                    override fun onAnimationEnd(animation: Animation) {
-                        textView.text = text
-                        val slideIn = TranslateAnimation(50f, 0f, 0f, 0f)
-                        slideIn.duration = 200
-                        textView.startAnimation(slideIn)
-                    }
-                    override fun onAnimationRepeat(animation: Animation) {}
-                })
-                textView.startAnimation(slideOut)
-            }
-            else -> {
-                textView.text = text
+        GlobalScope.launch(Dispatchers.Main) {
+            when (currentAnimationType) {
+                "fade" -> {
+                    val fadeOut = AlphaAnimation(1.0f, 0.0f)
+                    fadeOut.duration = 200
+                    fadeOut.setAnimationListener(object : Animation.AnimationListener {
+                        override fun onAnimationStart(animation: Animation) {}
+                        override fun onAnimationEnd(animation: Animation) {
+                            textView.text = text
+                            val fadeIn = AlphaAnimation(0.0f, 1.0f)
+                            fadeIn.duration = 200
+                            textView.startAnimation(fadeIn)
+                        }
+                        override fun onAnimationRepeat(animation: Animation) {}
+                    })
+                    textView.startAnimation(fadeOut)
+                }
+                "slide" -> {
+                    val slideOut = TranslateAnimation(0f, -50f, 0f, 0f)
+                    slideOut.duration = 200
+                    slideOut.setAnimationListener(object : Animation.AnimationListener {
+                        override fun onAnimationStart(animation: Animation) {}
+                        override fun onAnimationEnd(animation: Animation) {
+                            textView.text = text
+                            val slideIn = TranslateAnimation(50f, 0f, 0f, 0f)
+                            slideIn.duration = 200
+                            textView.startAnimation(slideIn)
+                        }
+                        override fun onAnimationRepeat(animation: Animation) {}
+                    })
+                    textView.startAnimation(slideOut)
+                }
+                else -> {
+                    textView.text = text
+                }
             }
         }
     }
 
-    // 调试模式切换
+    // 调试模式切换（修复版）
     fun setDebugMode(enable: Boolean) {
         isDebugMode = enable
         if (enable) {
             mediaMonitor.stopMonitoring()
-            debugHandler.post(debugRunnable)
+            currentDebugLine = 0
             updateLyricWithAnimation(debugLyrics[0])
+            debugHandler.post(debugRunnable) // 启动调试歌词轮播
         } else {
-            debugHandler.removeCallbacks(debugRunnable)
+            debugHandler.removeCallbacks(debugRunnable) // 停止调试歌词
             mediaMonitor.startMonitoring()
             updateLyricWithAnimation("未播放音乐")
         }
+    }
+
+    // 手动设置测试歌词（用于调试）
+    fun setTestLyric(title: String, artist: String) {
+        val playbackState = AppPlaybackState(title, artist, 0, true)
+        updateLyricDisplay(playbackState)
     }
 
     // 刷新当前歌词
@@ -299,7 +302,11 @@ class FloatLyricService : Service() {
         debugHandler.removeCallbacks(debugRunnable)
         mediaMonitor.stopMonitoring()
         floatView?.let { view ->
-            windowManager?.removeView(view)
+            try {
+                windowManager?.removeView(view)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 }
@@ -312,12 +319,44 @@ data class AppPlaybackState(
     val isPlaying: Boolean
 )
 
-// 媒体监控类
+// 增强版媒体监控类
 class MediaMonitor(private val context: Context, private val callback: (AppPlaybackState) -> Unit) {
-    fun startMonitoring() {
-        // 简化实现：模拟播放状态
-        callback.invoke(AppPlaybackState("测试歌曲", "测试歌手", 0, false))
+    private val handler = Handler(Looper.getMainLooper())
+    private var isMonitoring = false
+    
+    // 模拟媒体播放状态变化（实际项目可替换为真实监听）
+    private val simulateRunnable = object : Runnable {
+        private var counter = 0
+        private val testSongs = listOf(
+            Pair("测试歌曲1", "测试歌手A"),
+            Pair("测试歌曲2", "测试歌手B"),
+            Pair("测试歌曲3", "测试歌手C")
+        )
+        
+        override fun run() {
+            if (isMonitoring) {
+                val (title, artist) = testSongs[counter % testSongs.size]
+                val isPlaying = true
+                callback.invoke(AppPlaybackState(title, artist, counter * 1000L, isPlaying))
+                
+                counter++
+                handler.postDelayed(this, 5000) // 每5秒切换一首测试歌曲
+            }
+        }
     }
 
-    fun stopMonitoring() {}
+    fun startMonitoring() {
+        if (!isMonitoring) {
+            isMonitoring = true
+            // 立即发送初始状态
+            callback.invoke(AppPlaybackState("未播放", "未知艺术家", 0, false))
+            // 启动模拟播放状态
+            handler.postDelayed(simulateRunnable, 3000)
+        }
+    }
+
+    fun stopMonitoring() {
+        isMonitoring = false
+        handler.removeCallbacks(simulateRunnable)
+    }
 }
