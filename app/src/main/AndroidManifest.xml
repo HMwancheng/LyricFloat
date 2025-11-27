@@ -44,8 +44,8 @@
         <service
             android:name=".FloatLyricService"
             android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
-
+            android:foregroundServiceType="mediaPlayback|specialUse" /> <!-- Android 12+必需 -->
+        
     </application>
 
 </manifest>
