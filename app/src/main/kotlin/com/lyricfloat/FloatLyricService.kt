@@ -10,6 +10,7 @@ import android.graphics.PixelFormat
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
+import android.os.Binder
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -34,13 +35,15 @@ class FloatLyricService : Service() {
     private var mediaController: MediaController? = null
     private var testSongTimer: Timer? = null
     
-    // Binder for activity communication
-    inner class LocalBinder : IBinder() {
+    // Binder for activity communication（修复：继承自Binder类）
+    inner class LocalBinder : Binder() {
         fun getService(): FloatLyricService = this@FloatLyricService
     }
     
+    private val binder = LocalBinder() // 创建binder实例
+    
     override fun onBind(intent: Intent): IBinder {
-        return LocalBinder()
+        return binder // 返回binder实例
     }
 
     override fun onCreate() {
