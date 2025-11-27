@@ -5,9 +5,13 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.PixelFormat
+import android.os.Binder
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -19,36 +23,64 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 
 class FloatLyricService : Service() {
-
+    // Binder用于Activity与Service通信
+    private val binder = LocalBinder()
+    
+    // 悬浮窗相关
     private var windowManager: WindowManager? = null
     private var floatView: View? = null
     private var lyricTextView: TextView? = null
     private var lastX = 0f
     private var lastY = 0f
 
+    // 通知相关
     private val CHANNEL_ID = "LyricFloat_Channel"
     private val NOTIFICATION_ID = 1001
+    
+    // 歌词相关
     private val lyricManager = LyricManager(this)
     private var currentLyric: LyricManager.Lyric? = null
-
     private val mediaMonitor = MediaMonitor(this) { playbackState ->
         updateLyricDisplay(playbackState)
+    }
+
+    // 调试模式相关
+    private var isDebugMode = false
+    private val debugLyrics = listOf(
+        "这是第一句测试歌词",
+        "这是第二句测试歌词，稍微长一点看看显示效果",
+        "第三句测试歌词",
+        "测试歌词的换行和显示效果",
+        "最后一句测试歌词"
+    )
+    private var currentDebugLine = 0
+    private val debugHandler = Handler(Looper.getMainLooper())
+    private val debugRunnable = object : Runnable {
+        override fun run() {
+            currentDebugLine = (currentDebugLine + 1) % debugLyrics.size
+            lyricTextView?.text = debugLyrics[currentDebugLine]
+            debugHandler.postDelayed(this, 2000) // 每2秒切换一行
+        }
+    }
+
+    inner class LocalBinder : Binder() {
+        fun getService(): FloatLyricService = this@FloatLyricService
     }
 
     override fun onCreate() {
         super.onCreate()
         try {
             createNotificationChannel()
-            startForeground(NOTIFICATION_ID, createNotification()) // 5秒内必须调用
-            initFloatViewSafely() // 安全初始化悬浮窗
+            startForeground(NOTIFICATION_ID, createNotification())
+            initFloatViewSafely()
             mediaMonitor.startMonitoring()
         } catch (e: Exception) {
             e.printStackTrace()
-            stopSelf() // 初始化失败则停止服务
+            stopSelf()
         }
     }
 
-    // 安全初始化悬浮窗，添加异常捕获
+    // 安全初始化悬浮窗
     private fun initFloatViewSafely() {
         try {
             windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
@@ -59,7 +91,7 @@ class FloatLyricService : Service() {
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY // Android O+正确类型
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 else
                     @Suppress("DEPRECATION")
                     WindowManager.LayoutParams.TYPE_PHONE,
@@ -67,6 +99,7 @@ class FloatLyricService : Service() {
                 PixelFormat.TRANSLUCENT
             )
 
+            // 悬浮窗拖拽逻辑
             floatView?.setOnTouchListener { _, event ->
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> {
@@ -85,13 +118,13 @@ class FloatLyricService : Service() {
             windowManager?.addView(floatView, layoutParams)
         } catch (e: Exception) {
             e.printStackTrace()
-            // 悬浮窗创建失败，提示用户
             GlobalScope.launch(Dispatchers.Main) {
                 lyricTextView?.text = "悬浮窗创建失败，请检查权限"
             }
         }
     }
 
+    // 创建通知渠道
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -107,6 +140,7 @@ class FloatLyricService : Service() {
         }
     }
 
+    // 创建前台服务通知
     private fun createNotification(): Notification {
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
@@ -123,7 +157,10 @@ class FloatLyricService : Service() {
             .build()
     }
 
+    // 更新歌词显示
     private fun updateLyricDisplay(playbackState: AppPlaybackState) {
+        if (isDebugMode) return // 调试模式下不更新歌词
+
         if (playbackState.isPlaying) {
             if (currentLyric?.title != playbackState.title || currentLyric?.artist != playbackState.artist) {
                 GlobalScope.launch(Dispatchers.IO) {
@@ -138,22 +175,91 @@ class FloatLyricService : Service() {
                 val currentLine = lyricManager.getCurrentLyricLine(lyric, playbackState.position)
                 GlobalScope.launch(Dispatchers.Main) {
                     lyricTextView?.text = currentLine?.text ?: "${playbackState.title}\n${playbackState.artist}"
+                    
+                    // 同步更新MainActivity的状态
+                    (application as LyricFloatApp).mainActivity?.updateStatus(
+                        "正在播放：${playbackState.title} - ${playbackState.artist}"
+                    )
                 }
             } ?: run {
                 lyricTextView?.text = "${playbackState.title}\n${playbackState.artist}"
+                (application as LyricFloatApp).mainActivity?.updateStatus(
+                    "未找到歌词：${playbackState.title} - ${playbackState.artist}"
+                )
             }
         } else {
+            lyricTextView?.text = "未播放音乐"
+            (application as LyricFloatApp).mainActivity?.updateStatus("未检测到播放")
+        }
+    }
+
+    // 调试模式切换
+    fun setDebugMode(enable: Boolean) {
+        isDebugMode = enable
+        if (enable) {
+            mediaMonitor.stopMonitoring()
+            debugHandler.post(debugRunnable)
+            lyricTextView?.text = debugLyrics[0]
+        } else {
+            debugHandler.removeCallbacks(debugRunnable)
+            mediaMonitor.startMonitoring()
             lyricTextView?.text = "未播放音乐"
         }
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        mediaMonitor.stopMonitoring()
-        floatView?.let { view ->
-            windowManager?.removeView(view) // 安全移除悬浮窗
+    // 刷新当前歌词
+    fun refreshCurrentLyric() {
+        currentLyric = null
+        if (!isDebugMode) {
+            mediaMonitor.startMonitoring()
         }
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    // 设置歌词字体大小
+    fun setLyricFontSize(size: Int) {
+        lyricTextView?.textSize = size.toFloat()
+    }
+
+    // 设置歌词颜色
+    fun setLyricColor(colorHex: String) {
+        try {
+            val color = Color.parseColor(colorHex)
+            lyricTextView?.setTextColor(color)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            lyricTextView?.setTextColor(Color.WHITE) // 默认白色
+        }
+    }
+
+    override fun onBind(intent: Intent): IBinder {
+        return binder
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        debugHandler.removeCallbacks(debugRunnable)
+        mediaMonitor.stopMonitoring()
+        floatView?.let { view ->
+            windowManager?.removeView(view)
+        }
+    }
+}
+
+// 媒体播放状态数据类
+data class AppPlaybackState(
+    val title: String,
+    val artist: String,
+    val position: Long,
+    val isPlaying: Boolean
+)
+
+// 媒体监控类（简化实现，实际可通过AudioManager或媒体库监听）
+class MediaMonitor(private val context: Context, private val callback: (AppPlaybackState) -> Unit) {
+    fun startMonitoring() {
+        // 实际项目中可通过MediaBrowserServiceCompat或AudioManager监听播放状态
+        // 此处为示例，模拟播放状态
+        callback.invoke(AppPlaybackState("测试歌曲", "测试歌手", 0, false))
+    }
+
+    fun stopMonitoring() {}
 }
