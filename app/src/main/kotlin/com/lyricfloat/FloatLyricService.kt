@@ -13,8 +13,9 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
-import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 
 class FloatLyricService : Service() {
@@ -36,8 +37,8 @@ class FloatLyricService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel() // 真实创建通知渠道（前台服务必需）
-        startForeground(NOTIFICATION_ID, createNotification()) // 启动前台服务
+        createNotificationChannel()
+        startForeground(NOTIFICATION_ID, createNotification())
         initFloatView()
         mediaMonitor.startMonitoring()
     }
@@ -58,7 +59,7 @@ class FloatLyricService : Service() {
         }
     }
 
-    // 2. 创建前台服务通知（避免服务被系统杀死）
+    // 2. 创建前台服务通知
     private fun createNotification(): Notification {
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
@@ -75,13 +76,12 @@ class FloatLyricService : Service() {
             .build()
     }
 
-    // 3. 初始化悬浮窗（优化拖拽体验）
+    // 3. 初始化悬浮窗
     private fun initFloatView() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         floatView = LayoutInflater.from(this).inflate(R.layout.float_lyric_view, null)
         lyricTextView = floatView.findViewById(R.id.lyric_text)
 
-        // 悬浮窗参数（适配Android版本）
         val layoutParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -94,7 +94,7 @@ class FloatLyricService : Service() {
             PixelFormat.TRANSLUCENT
         )
 
-        // 优化拖拽逻辑（支持平滑拖动）
+        // 拖拽逻辑
         floatView.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -113,25 +113,24 @@ class FloatLyricService : Service() {
         windowManager.addView(floatView, layoutParams)
     }
 
-    // 4. 更新歌词显示（优先本地，后网络）
+    // 4. 更新歌词显示（使用GlobalScope替代lifecycleScope）
     private fun updateLyricDisplay(playbackState: AppPlaybackState) {
         if (playbackState.isPlaying) {
-            // 检查是否切换歌曲（避免重复解析）
+            // 检查歌曲切换
             if (currentLyric?.title != playbackState.title || currentLyric?.artist != playbackState.artist) {
-                lifecycleScope.launch(Dispatchers.IO) {
-                    // 第一步：读取本地歌词
+                // 使用IO线程解析歌词
+                GlobalScope.launch(Dispatchers.IO) {
                     currentLyric = lyricManager.parseLocalLyric(playbackState.title, playbackState.artist)
-                    // 第二步：本地无歌词则请求网络
                     if (currentLyric == null) {
                         currentLyric = lyricManager.fetchOnlineLyric(playbackState.title, playbackState.artist)
                     }
                 }
             }
 
-            // 显示歌词或歌曲信息
+            // 更新UI（主线程）
             currentLyric?.let { lyric ->
                 val currentLine = lyricManager.getCurrentLyricLine(lyric, playbackState.position)
-                lifecycleScope.launch(Dispatchers.Main) {
+                GlobalScope.launch(Dispatchers.Main) {
                     lyricTextView.text = currentLine?.text ?: "${playbackState.title}\n${playbackState.artist}"
                 }
             } ?: run {
@@ -145,7 +144,9 @@ class FloatLyricService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         mediaMonitor.stopMonitoring()
-        windowManager.removeView(floatView)
+        if (::windowManager.isInitialized && ::floatView.isInitialized) {
+            windowManager.removeView(floatView)
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
